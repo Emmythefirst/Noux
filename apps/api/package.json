@@ -1,0 +1,23 @@
+{
+  "name": "@axia/api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "start": "tsx src/server.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@axia/core": "workspace:*",
+    "@hono/node-server": "^1.13.0",
+    "@solana/web3.js": "1.99.0",
+    "bs58": "^6.0.0",
+    "hono": "^4.6.0",
+    "pg": "^8.13.0",
+    "tsx": "^4.19.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": { "@types/node": "^22.0.0", "@types/pg": "^8.11.0", "typescript": "^5.7.3", "vitest": "^3.0.0" }
+}

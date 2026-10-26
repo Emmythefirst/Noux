@@ -1,0 +1,19 @@
+{
+  "name": "@axia/gateway",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": { "test": "vitest run", "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "@anchor-lang/core": "^1.2.1",
+    "@axia/core": "workspace:*",
+    "@solana/spl-token": "^0.4.0",
+    "@solana/web3.js": "1.99.0",
+    "@x402/core": "^2.28.0",
+    "@x402/express": "^2.28.0",
+    "@x402/svm": "^2.28.0"
+  },
+  "devDependencies": { "typescript": "^5.7.3", "vitest": "^3.0.0", "@types/node": "^22.0.0", "@types/express": "^5.0.0", "express": "^5.0.0" }
+}
