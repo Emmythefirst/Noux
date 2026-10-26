@@ -1,0 +1,12 @@
+# Local-only session log. NEVER commit.
+progress.md
+
+node_modules/
+target/
+.anchor/
+.env
+.env.*
+*.json.key
+keypairs/
+.DS_Store
+spike/keys/
