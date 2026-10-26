@@ -27,6 +27,7 @@ pub mod axia {
         fee_bps: u16,
         commission_budget: u64,
         attribution_key: Pubkey,
+        cluster: [u8; 8],
     ) -> Result<()> {
         require!(commission_bps <= MAX_COMMISSION_BPS, AxiaError::BpsTooHigh);
         require!(fee_bps <= MAX_FEE_BPS, AxiaError::BpsTooHigh);
@@ -40,6 +41,7 @@ pub mod axia {
         c.commission_budget = commission_budget;
         c.commission_spent = 0;
         c.attribution_key = attribution_key;
+        c.cluster = cluster;
         c.fee_owner = ctx.accounts.fee_owner.key();
         c.bump = ctx.bumps.campaign;
         Ok(())
@@ -63,6 +65,8 @@ pub mod axia {
         require!(price > 0, AxiaError::ZeroPrice);
 
         let msg = claim_message(
+            ctx.program_id,
+            &c.cluster,
             &ctx.accounts.campaign.key(),
             &ctx.accounts.distributor.key(),
             &ctx.accounts.buyer.key(),
@@ -161,14 +165,38 @@ pub mod axia {
         });
         Ok(())
     }
+
+    /// Permissionless. Reclaims rent from a sale nobody paid, once its claim has expired.
+    /// Only after expiry: a closed sale's nonce can then never be replayed (claim is dead).
+    pub fn close_expired_sale(ctx: Context<CloseExpiredSale>) -> Result<()> {
+        let sale = &ctx.accounts.sale;
+        require!(sale.status == SaleStatus::Open, AxiaError::AlreadySettled);
+        require!(Clock::get()?.unix_timestamp > sale.expiry, AxiaError::NotExpired);
+        require!(ctx.accounts.sale_vault.amount == 0, AxiaError::VaultNotEmpty);
+        let seeds: &[&[u8]] = &[b"sale", sale.campaign.as_ref(), sale.nonce.as_ref(), &[sale.bump]];
+        token::close_account(CpiContext::new_with_signer(
+            ctx.accounts.token_program.key(),
+            CloseAccount {
+                account: ctx.accounts.sale_vault.to_account_info(),
+                destination: ctx.accounts.rent_payer.to_account_info(),
+                authority: ctx.accounts.sale.to_account_info(),
+            },
+            &[seeds],
+        ))?;
+        Ok(())
+    }
 }
 
 fn mul_bps(amount: u64, bps: u16) -> Result<u64> {
     Ok((amount as u128 * bps as u128 / BPS as u128) as u64)
 }
 
-/// Canonical claim message (fixed layout, 32*4 + 8 + 8 = 144 bytes).
+/// Domain-separated claim message: tag | program id | cluster | campaign | distributor |
+/// buyer | expiry | price | nonce  (13 + 32 + 8 + 32*3 + 8 + 8 + 32 = 197 bytes).
+pub const CLAIM_TAG: &[u8; 13] = b"AXIA-CLAIM-v1";
 pub fn claim_message(
+    program_id: &Pubkey,
+    cluster: &[u8; 8],
     campaign: &Pubkey,
     distributor: &Pubkey,
     buyer: &Pubkey,
@@ -176,7 +204,10 @@ pub fn claim_message(
     price: u64,
     nonce: &[u8; 32],
 ) -> Vec<u8> {
-    let mut m = Vec::with_capacity(144);
+    let mut m = Vec::with_capacity(197);
+    m.extend_from_slice(CLAIM_TAG);
+    m.extend_from_slice(program_id.as_ref());
+    m.extend_from_slice(cluster);
     m.extend_from_slice(campaign.as_ref());
     m.extend_from_slice(distributor.as_ref());
     m.extend_from_slice(buyer.as_ref());
@@ -274,6 +305,25 @@ pub struct SettleSale<'info> {
     pub token_program: Program<'info, Token>,
 }
 
+#[derive(Accounts)]
+pub struct CloseExpiredSale<'info> {
+    #[account(
+        mut, close = rent_payer,
+        seeds = [b"sale", sale.campaign.as_ref(), sale.nonce.as_ref()], bump = sale.bump
+    )]
+    pub sale: Box<Account<'info, Sale>>,
+    #[account(mut, associated_token::mint = mint, associated_token::authority = sale)]
+    pub sale_vault: Box<Account<'info, TokenAccount>>,
+    #[account(address = campaign.mint)]
+    pub mint: Box<Account<'info, Mint>>,
+    #[account(address = sale.campaign)]
+    pub campaign: Box<Account<'info, Campaign>>,
+    /// CHECK: receives the rent back; must be whoever paid it.
+    #[account(mut, address = sale.rent_payer)]
+    pub rent_payer: UncheckedAccount<'info>,
+    pub token_program: Program<'info, Token>,
+}
+
 #[account]
 #[derive(InitSpace)]
 pub struct Campaign {
@@ -281,6 +331,8 @@ pub struct Campaign {
     pub mint: Pubkey,
     pub fee_owner: Pubkey,
     pub attribution_key: Pubkey,
+    /// Cluster tag (e.g. b"devnet\0\0"); part of the signed claim so claims can't cross clusters.
+    pub cluster: [u8; 8],
     pub campaign_id: u64,
     pub commission_budget: u64,
     pub commission_spent: u64,
@@ -350,6 +402,10 @@ pub enum AxiaError {
     AlreadySettled,
     #[msg("sale vault holds less than the price")]
     Underpaid,
+    #[msg("claim has not expired yet")]
+    NotExpired,
+    #[msg("sale vault still holds funds; settle it instead")]
+    VaultNotEmpty,
     #[msg("math overflow")]
     Math,
 }
