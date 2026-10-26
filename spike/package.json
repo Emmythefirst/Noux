@@ -12,6 +12,7 @@
   "type": "commonjs",
   "dependencies": {
     "@anchor-lang/core": "^1.2.1",
+    "@coinbase/x402": "^2.1.0",
     "@scure/base": "^2.4.0",
     "@solana/kit": "^5.5.1",
     "@solana/spl-token": "^0.4.15",
