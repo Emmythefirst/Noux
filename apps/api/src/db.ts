@@ -19,5 +19,8 @@ export const MIGRATIONS = [
   `CREATE INDEX IF NOT EXISTS claim_issuance_campaign ON claim_issuance (campaign, created_at)`,
 ];
 
+import { SEEN_MIGRATION } from "./seen-store";
+MIGRATIONS.push(SEEN_MIGRATION);
+
 export function createPool(url: string) { return new pg.Pool({ connectionString: url, max: 10 }); }
 export async function migrate(pool: pg.Pool) { for (const sql of MIGRATIONS) await pool.query(sql); }

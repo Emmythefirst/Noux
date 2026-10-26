@@ -163,3 +163,15 @@ describe("key + config hygiene", () => {
     catch (e) { expect((e as Error).message).toContain("RPC_URL"); expect((e as Error).message).not.toContain("SUPERSECRETPASSWORD"); }
   });
 });
+
+import { PgSeenStore } from "../src/seen-store";
+describe("PgSeenStore (keeper clock)", () => {
+  it("first writer wins, survives a new store instance, delete resets", async () => {
+    await pool.query("TRUNCATE vault_first_seen");
+    const a = new PgSeenStore(pool), b = new PgSeenStore(createPool(DB));
+    expect(await a.get("S1")).toBeNull();
+    await a.set("S1", 1_800_000_000); await b.set("S1", 1_900_000_000); // second writer must not move the clock
+    expect(await b.get("S1")).toBe(1_800_000_000);
+    await a.delete("S1"); expect(await b.get("S1")).toBeNull();
+  });
+});

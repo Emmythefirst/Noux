@@ -7,7 +7,9 @@
     "dev": "tsx src/server.ts",
     "start": "tsx src/server.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "devnet-e2e": "tsx scripts/devnet-e2e.ts",
+    "keeper": "tsx src/keeper.ts"
   },
   "dependencies": {
     "@axia/core": "workspace:*",
@@ -17,7 +19,22 @@
     "hono": "^4.6.0",
     "pg": "^8.13.0",
     "tsx": "^4.19.0",
-    "zod": "^3.24.0"
+    "zod": "^3.24.0",
+    "@axia/gateway": "workspace:*"
   },
-  "devDependencies": { "@types/node": "^22.0.0", "@types/pg": "^8.11.0", "typescript": "^5.7.3", "vitest": "^3.0.0" }
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.0",
+    "@anchor-lang/core": "^1.2.1",
+    "@coinbase/x402": "^2.1.0",
+    "@solana/kit": "^6.9.0",
+    "@solana/spl-token": "^0.4.0",
+    "@x402/core": "^2.28.0",
+    "@x402/fetch": "^2.28.0",
+    "@x402/svm": "^2.28.0",
+    "express": "^5.0.0",
+    "@types/express": "^5.0.0"
+  }
 }

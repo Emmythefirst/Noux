@@ -1,0 +1,10 @@
+node_modules
+**/node_modules
+axia/target
+spike
+.git
+.env
+.env.*
+progress.md
+**/keys
+*.log

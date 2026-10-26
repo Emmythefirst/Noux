@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import nacl from "tweetnacl";
 import { inspect } from "node:util";
+import { BRAND, CLAIM_TAG, PROGRAM_CLAIM_TAG_LEN } from "../src";
 import {
   buildClaimMessage, signClaim, verifyClaimSignature, claimIsSelfConsistent, LocalKeySigner, claimToWire, claimFromWire,
   signClaimRequest, verifyClaimRequest, CLAIM_MESSAGE_LEN, salePda, campaignPda,
@@ -15,8 +16,15 @@ const base = () => ({ programId, cluster: "devnet", campaign: mk(), distributor:
 function referenceMessage(p: ReturnType<typeof base>) {
   const u64 = (n: bigint) => { const b = Buffer.alloc(8); b.writeBigUInt64LE(n); return b; };
   const i64 = (n: number) => { const b = Buffer.alloc(8); b.writeBigInt64LE(BigInt(n)); return b; };
-  return Buffer.concat([Buffer.from("AXIA-CLAIM-v1"), programId.toBuffer(), Buffer.from("devnet\0\0"), p.campaign.toBuffer(), p.distributor.toBuffer(), p.buyer.toBuffer(), i64(p.expiry), u64(p.price), Buffer.from(p.nonce)]);
+  return Buffer.concat([Buffer.from(CLAIM_TAG), programId.toBuffer(), Buffer.from("devnet\0\0"), p.campaign.toBuffer(), p.distributor.toBuffer(), p.buyer.toBuffer(), i64(p.expiry), u64(p.price), Buffer.from(p.nonce)]);
 }
+
+describe("brand", () => {
+  it("claim tag length equals the one compiled into the program (rename guard)", () => {
+    expect(Buffer.byteLength(CLAIM_TAG)).toBe(PROGRAM_CLAIM_TAG_LEN);
+    expect(CLAIM_TAG.startsWith(BRAND.tagPrefix)).toBe(true);
+  });
+});
 
 describe("claim message", () => {
   it("matches the on-chain layout byte for byte and is 197 bytes", () => {

@@ -6,3 +6,4 @@ allowBuilds:
   bufferutil: false
   utf-8-validate: false
   bigint-buffer: false
+  '@coinbase/x402': false

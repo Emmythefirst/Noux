@@ -1,9 +1,10 @@
 import { PublicKey } from "@solana/web3.js";
 import nacl from "tweetnacl";
 
+import { CLAIM_TAG, CLAIM_REQUEST_TAG, PROGRAM_CLAIM_TAG_LEN } from "./brand";
+
 /** Must match `claim_message` in programs/axia/src/lib.rs byte for byte. */
-export const CLAIM_TAG = "AXIA-CLAIM-v1";
-export const CLAIM_MESSAGE_LEN = 197;
+export const CLAIM_MESSAGE_LEN = 184 + PROGRAM_CLAIM_TAG_LEN;
 export const CLUSTER_TAG_LEN = 8;
 
 export interface ClaimParams {
@@ -108,7 +109,7 @@ export function claimFromWire(w: ClaimWire): SignedClaim {
 /* ---- buyer-signed claim request (proves the buyer wallet consents; prevents binding claims to wallets you don't control) ---- */
 export interface ClaimRequestAuth { campaign: PublicKey; distributor: PublicKey; buyer: PublicKey; price: bigint; ts: number }
 export function claimRequestMessage(a: ClaimRequestAuth): Buffer {
-  return Buffer.from(`AXIA-CLAIM-REQ-v1|${a.campaign.toBase58()}|${a.distributor.toBase58()}|${a.buyer.toBase58()}|${a.price}|${a.ts}`, "utf8");
+  return Buffer.from(`${CLAIM_REQUEST_TAG}|${a.campaign.toBase58()}|${a.distributor.toBase58()}|${a.buyer.toBase58()}|${a.price}|${a.ts}`, "utf8");
 }
 export function signClaimRequest(buyerSecret: Uint8Array, a: ClaimRequestAuth): Uint8Array {
   return nacl.sign.detached(claimRequestMessage(a), buyerSecret);
