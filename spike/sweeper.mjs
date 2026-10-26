@@ -1,15 +1,23 @@
-// Settlement sweeper (keeper). Idempotent: settles any Open sale whose vault holds >= price.
+// Settlement sweeper (keeper). Idempotent: settles any Open sale whose hold has elapsed and whose vault holds >= price.
 // Safe to run repeatedly / concurrently: settle_sale is permissionless and a settled sale's vault is closed,
 // so a second attempt just fails and is skipped.
 import { PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
-export async function sweep({ program, conn, payer, mint, log = () => {} }) {
+export async function sweep({ program, conn, payer, mint, only = null, log = () => {} }) {
   const out = { settled: [], skipped: 0, failed: [] };
   const campaigns = new Map();
-  const sales = await program.account.sale.all();
+  // Fetch only accounts of the current Sale size and decode defensively: Sale accounts created by an older
+  // program layout must be skipped, not crash the keeper.
+  const raw = await conn.getProgramAccounts(program.programId, { filters: [{ dataSize: program.account.sale.size }] });
+  const sales = [];
+  for (const { pubkey, account } of raw) {
+    try { sales.push({ publicKey: pubkey, account: program.coder.accounts.decode("sale", account.data) }); } catch { out.skipped++; }
+  }
   for (const { publicKey: salePk, account: s } of sales) {
+    if (only && !only.some((k) => k.equals(salePk))) { out.skipped++; continue; }
     if (!("open" in s.status)) { out.skipped++; continue; }
+    if (Date.now() / 1000 < s.holdUntil.toNumber()) { out.skipped++; continue; } // still in the refund hold; merchant may settle early
     const vault = getAssociatedTokenAddressSync(mint, salePk, true);
     let amount = 0n;
     try { amount = BigInt((await conn.getTokenAccountBalance(vault)).value.amount); } catch { out.skipped++; continue; }
@@ -20,7 +28,7 @@ export async function sweep({ program, conn, payer, mint, log = () => {} }) {
       const ata = (o) => getAssociatedTokenAddressSync(mint, o, true);
       const pre = [c.merchant, s.distributor, c.feeOwner].map((o) => createAssociatedTokenAccountIdempotentInstruction(payer.publicKey, ata(o), o, mint));
       const sig = await program.methods.settleSale().accounts({
-        campaign: s.campaign, sale: salePk, saleVault: vault, merchantAta: ata(c.merchant), distributorAta: ata(s.distributor),
+        caller: payer.publicKey, campaign: s.campaign, sale: salePk, saleVault: vault, merchantAta: ata(c.merchant), distributorAta: ata(s.distributor),
         feeAta: ata(c.feeOwner), rentPayer: s.rentPayer, tokenProgram: TOKEN_PROGRAM_ID,
       }).preInstructions(pre).rpc();
       out.settled.push({ sale: salePk.toBase58(), sig }); log(`swept ${salePk.toBase58()}`);

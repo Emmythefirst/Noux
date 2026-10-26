@@ -15,6 +15,7 @@ declare_id!("AC6AtoRALLszNGNLmHte2UXKzCqBYQKhPdtq5qs77nkL");
 pub const BPS: u64 = 10_000;
 pub const MAX_COMMISSION_BPS: u16 = 5_000;
 pub const MAX_FEE_BPS: u16 = 500;
+pub const MAX_HOLD_SECS: u32 = 600;
 
 #[program]
 pub mod axia {
@@ -28,9 +29,11 @@ pub mod axia {
         commission_budget: u64,
         attribution_key: Pubkey,
         cluster: [u8; 8],
+        hold_secs: u32,
     ) -> Result<()> {
         require!(commission_bps <= MAX_COMMISSION_BPS, AxiaError::BpsTooHigh);
         require!(fee_bps <= MAX_FEE_BPS, AxiaError::BpsTooHigh);
+        require!(hold_secs <= MAX_HOLD_SECS, AxiaError::HoldTooLong);
         require!(commission_bps as u64 + fee_bps as u64 <= BPS, AxiaError::BpsTooHigh);
         let c = &mut ctx.accounts.campaign;
         c.merchant = ctx.accounts.merchant.key();
@@ -42,6 +45,9 @@ pub mod axia {
         c.commission_spent = 0;
         c.attribution_key = attribution_key;
         c.cluster = cluster;
+        c.hold_secs = hold_secs;
+        c.settled_count = 0;
+        c.refunded_count = 0;
         c.fee_owner = ctx.accounts.fee_owner.key();
         c.bump = ctx.bumps.campaign;
         Ok(())
@@ -86,6 +92,7 @@ pub mod axia {
         s.rent_payer = ctx.accounts.payer.key();
         s.status = SaleStatus::Open;
         s.opened_at = now;
+        s.hold_until = now + c.hold_secs as i64;
         s.bump = ctx.bumps.sale;
         // Terms frozen at open time so later campaign edits can't change this sale.
         s.commission_bps = c.commission_bps;
@@ -97,6 +104,12 @@ pub mod axia {
     pub fn settle_sale(ctx: Context<SettleSale>) -> Result<()> {
         let sale = &ctx.accounts.sale;
         require!(sale.status == SaleStatus::Open, AxiaError::AlreadySettled);
+        // Merchant (who has confirmed delivery) may settle immediately; everyone else waits out the hold.
+        let is_merchant = ctx.accounts.caller.key() == ctx.accounts.campaign.merchant;
+        require!(
+            is_merchant || Clock::get()?.unix_timestamp >= sale.hold_until,
+            AxiaError::HoldActive
+        );
         let amount = ctx.accounts.sale_vault.amount;
         require!(amount >= sale.price, AxiaError::Underpaid);
 
@@ -110,6 +123,7 @@ pub mod axia {
             .and_then(|v| v.checked_sub(commission))
             .ok_or(AxiaError::Math)?; // remainder (rounding dust) goes to merchant
         c.commission_spent = c.commission_spent.checked_add(commission).ok_or(AxiaError::Math)?;
+        c.settled_count = c.settled_count.checked_add(1).ok_or(AxiaError::Math)?;
 
         let campaign_key = sale.campaign;
         let seeds: &[&[u8]] = &[b"sale", campaign_key.as_ref(), sale.nonce.as_ref(), &[sale.bump]];
@@ -163,6 +177,46 @@ pub mod axia {
             commission_amount: commission,
             fee_amount: fee,
         });
+        Ok(())
+    }
+
+    /// Merchant only, before settlement: returns the whole vault to the claim-bound buyer and pays
+    /// no commission or fee. The sale stays on-chain as a `Refunded` receipt. After settlement it is final.
+    pub fn refund_sale(ctx: Context<RefundSale>) -> Result<()> {
+        let sale = &ctx.accounts.sale;
+        require!(sale.status == SaleStatus::Open, AxiaError::AlreadySettled);
+        let amount = ctx.accounts.sale_vault.amount;
+        require!(amount > 0, AxiaError::NothingToRefund);
+        let seeds: &[&[u8]] = &[b"sale", sale.campaign.as_ref(), sale.nonce.as_ref(), &[sale.bump]];
+        let signer = &[seeds];
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.key(),
+                Transfer {
+                    from: ctx.accounts.sale_vault.to_account_info(),
+                    to: ctx.accounts.buyer_ata.to_account_info(),
+                    authority: ctx.accounts.sale.to_account_info(),
+                },
+                signer,
+            ),
+            amount,
+        )?;
+        token::close_account(CpiContext::new_with_signer(
+            ctx.accounts.token_program.key(),
+            CloseAccount {
+                account: ctx.accounts.sale_vault.to_account_info(),
+                destination: ctx.accounts.rent_payer.to_account_info(),
+                authority: ctx.accounts.sale.to_account_info(),
+            },
+            signer,
+        ))?;
+        let c = &mut ctx.accounts.campaign;
+        c.refunded_count = c.refunded_count.checked_add(1).ok_or(AxiaError::Math)?;
+        let s = &mut ctx.accounts.sale;
+        s.status = SaleStatus::Refunded;
+        s.gross = amount;
+        s.settled_at = Clock::get()?.unix_timestamp;
+        emit!(SaleRefunded { sale: s.key(), campaign: s.campaign, buyer: s.buyer, amount });
         Ok(())
     }
 
@@ -287,6 +341,7 @@ pub struct OpenSale<'info> {
 
 #[derive(Accounts)]
 pub struct SettleSale<'info> {
+    pub caller: Signer<'info>,
     #[account(mut, address = sale.campaign)]
     pub campaign: Box<Account<'info, Campaign>>,
     #[account(mut, seeds = [b"sale", sale.campaign.as_ref(), sale.nonce.as_ref()], bump = sale.bump)]
@@ -299,6 +354,24 @@ pub struct SettleSale<'info> {
     pub distributor_ata: Box<Account<'info, TokenAccount>>,
     #[account(mut, associated_token::mint = campaign.mint, associated_token::authority = campaign.fee_owner)]
     pub fee_ata: Box<Account<'info, TokenAccount>>,
+    /// CHECK: receives the vault's rent back; must be whoever paid it.
+    #[account(mut, address = sale.rent_payer)]
+    pub rent_payer: UncheckedAccount<'info>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct RefundSale<'info> {
+    #[account(address = campaign.merchant)]
+    pub merchant: Signer<'info>,
+    #[account(mut, address = sale.campaign)]
+    pub campaign: Box<Account<'info, Campaign>>,
+    #[account(mut, seeds = [b"sale", sale.campaign.as_ref(), sale.nonce.as_ref()], bump = sale.bump)]
+    pub sale: Box<Account<'info, Sale>>,
+    #[account(mut, associated_token::mint = campaign.mint, associated_token::authority = sale)]
+    pub sale_vault: Box<Account<'info, TokenAccount>>,
+    #[account(mut, associated_token::mint = campaign.mint, associated_token::authority = sale.buyer)]
+    pub buyer_ata: Box<Account<'info, TokenAccount>>,
     /// CHECK: receives the vault's rent back; must be whoever paid it.
     #[account(mut, address = sale.rent_payer)]
     pub rent_payer: UncheckedAccount<'info>,
@@ -333,6 +406,10 @@ pub struct Campaign {
     pub attribution_key: Pubkey,
     /// Cluster tag (e.g. b"devnet\0\0"); part of the signed claim so claims can't cross clusters.
     pub cluster: [u8; 8],
+    /// Seconds after a sale is opened before ANYONE may settle it. The merchant can settle at once.
+    pub hold_secs: u32,
+    pub settled_count: u64,
+    pub refunded_count: u64,
     pub campaign_id: u64,
     pub commission_budget: u64,
     pub commission_spent: u64,
@@ -345,6 +422,7 @@ pub struct Campaign {
 pub enum SaleStatus {
     Open,
     Settled,
+    Refunded,
 }
 
 /// Doubles as the public receipt once settled.
@@ -358,6 +436,7 @@ pub struct Sale {
     pub nonce: [u8; 32],
     pub expiry: i64,
     pub opened_at: i64,
+    pub hold_until: i64,
     pub settled_at: i64,
     pub price: u64,
     pub gross: u64,
@@ -368,6 +447,14 @@ pub struct Sale {
     pub fee_bps: u16,
     pub status: SaleStatus,
     pub bump: u8,
+}
+
+#[event]
+pub struct SaleRefunded {
+    pub sale: Pubkey,
+    pub campaign: Pubkey,
+    pub buyer: Pubkey,
+    pub amount: u64,
 }
 
 #[event]
@@ -406,6 +493,12 @@ pub enum AxiaError {
     NotExpired,
     #[msg("sale vault still holds funds; settle it instead")]
     VaultNotEmpty,
+    #[msg("hold window still active; only the merchant can settle now")]
+    HoldActive,
+    #[msg("hold exceeds the maximum")]
+    HoldTooLong,
+    #[msg("sale vault is empty, nothing to refund")]
+    NothingToRefund,
     #[msg("math overflow")]
     Math,
 }

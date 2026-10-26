@@ -48,18 +48,26 @@ async function openSale({ campaign, dist = distributor.publicKey, buyer = payer.
     .accounts({ payer: payer.publicKey, campaign, distributor: dist, buyer, mint: USDC, sale, saleVault: ata(sale), instructions: SYSVAR_INSTRUCTIONS_PUBKEY, tokenProgram: TOKEN_PROGRAM_ID, associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId })
     .preInstructions([ed25519Ix(msg, signer)]).rpc();
 }
-async function settle(campaignPk, salePk, distKey = distributor.publicKey) {
+async function settle(campaignPk, salePk, distKey = distributor.publicKey, caller = merchant) {
   const c = await program.account.campaign.fetch(campaignPk);
-  return program.methods.settleSale().accounts({ campaign: campaignPk, sale: salePk, saleVault: ata(salePk), merchantAta: ata(c.merchant), distributorAta: ata(distKey), feeAta: ata(c.feeOwner), rentPayer: payer.publicKey, tokenProgram: TOKEN_PROGRAM_ID }).preInstructions([createAssociatedTokenAccountIdempotentInstruction(payer.publicKey, ata(distKey), distKey, USDC)]).rpc();
+  const pre = createAssociatedTokenAccountIdempotentInstruction(payer.publicKey, ata(distKey), distKey, USDC);
+  const m = program.methods.settleSale().accounts({ caller: caller.publicKey, campaign: campaignPk, sale: salePk, saleVault: ata(salePk), merchantAta: ata(c.merchant), distributorAta: ata(distKey), feeAta: ata(c.feeOwner), rentPayer: payer.publicKey, tokenProgram: TOKEN_PROGRAM_ID }).preInstructions([pre]);
+  return caller.publicKey.equals(payer.publicKey) ? m.rpc() : m.signers([caller]).rpc();
+}
+async function refund(campaignPk, salePk, signer = merchant) {
+  const sale = await program.account.sale.fetch(salePk);
+  const pre = createAssociatedTokenAccountIdempotentInstruction(payer.publicKey, ata(sale.buyer), sale.buyer, USDC);
+  const m = program.methods.refundSale().accounts({ merchant: signer.publicKey, campaign: campaignPk, sale: salePk, saleVault: ata(salePk), buyerAta: ata(sale.buyer), rentPayer: payer.publicKey, tokenProgram: TOKEN_PROGRAM_ID }).preInstructions([pre]);
+  return signer.publicKey.equals(payer.publicKey) ? m.rpc() : m.signers([signer]).rpc();
 }
 async function expectFail(name, fn, needle) {
   try { await fn(); rec(name, false, "unexpectedly succeeded"); }
   catch (e) { const t = (e.message || "") + JSON.stringify(e.logs || e.transactionLogs || ""); rec(name, t.includes(needle), `rejected (${needle}): ${t.match(/Error Message: ([^."]*)/)?.[1] ?? e.message?.slice(0, 120)}`); }
 }
-async function newCampaign(budget, commissionBps = 1500, feeBps = 100) {
+async function newCampaign(budget, commissionBps = 1500, feeBps = 100, hold = 0) {
   const id = new anchor.BN(crypto.randomBytes(6));
   const [campaign] = PublicKey.findProgramAddressSync([Buffer.from("campaign"), merchant.publicKey.toBuffer(), id.toArrayLike(Buffer, "le", 8)], PROG);
-  await program.methods.createCampaign(id, commissionBps, feeBps, new anchor.BN(budget), attest.publicKey, [...CLUSTER])
+  await program.methods.createCampaign(id, commissionBps, feeBps, new anchor.BN(budget), attest.publicKey, [...CLUSTER], hold)
     .accounts({ merchant: merchant.publicKey, mint: USDC, feeOwner: feeOwner.publicKey, campaign, systemProgram: SystemProgram.programId }).signers([merchant]).rpc();
   return campaign;
 }
@@ -73,7 +81,8 @@ const snap = async () => ({ m: await bal(m.merchant), d: await bal(m.dist), f: a
 const exp = () => Math.floor(Date.now() / 1000) + 3600;
 
 // ---- gateway with REAL x402 ----
-const campaignMain = await newCampaign(1_000_000_000);
+const HOLD = 15; // seconds: anyone-settle is blocked until then; the merchant can settle (or refund) at once
+const campaignMain = await newCampaign(1_000_000_000, 1500, 100, HOLD);
 console.log("main campaign:", campaignMain.toBase58());
 import { createFacilitatorConfig } from "@coinbase/x402";
 const FAC = process.env.FACILITATOR === "cdp" ? "cdp" : "x402.org";
@@ -186,10 +195,21 @@ if ((await bal(ata(attacker.publicKey))) < 200_000) await transfer(conn, payer, 
 const atkFetch = wrapFetchWithPayment(fetch, new x402Client().register("solana:*", new ExactSvmClient(await createKeyPairSignerFromBytes(attacker.secretKey))));
 const { id: bid, claim: bclaim } = issueClaim({ price: 100_000 });
 const atkBefore = await bal(ata(attacker.publicKey));
-let atkStatus; try { atkStatus = (await atkFetch("http://localhost:4022/paid", { headers: { "x-axia-claim": bid } })).status; } catch (e) { atkStatus = "error: " + e.message?.slice(0, 80); }
+let atkStatus, atkWhy = "";
+for (let attempt = 1; attempt <= 4; attempt++) { // facilitator calls from the gateway can fail at the network level ("fetch failed"): retry those only
+  try {
+    const ar = await atkFetch("http://localhost:4022/paid", { headers: { "x-axia-claim": bid } }); atkStatus = ar.status;
+    const ph = ar.headers.get("payment-required"); const body = await ar.text();
+    const why = ph ? JSON.parse(Buffer.from(ph, "base64").toString()).error : "-";
+    atkWhy = `attempt ${attempt}: body=${body.slice(0, 120)} required.error=${why}`;
+    if (why !== "fetch failed") break;
+  } catch (e) { atkStatus = "error: " + e.message?.slice(0, 80); }
+  await sleep(1500);
+}
 await sleep(2500);
 const atkAfter = await bal(ata(attacker.publicKey)); let bVault = 0; try { bVault = await bal(ata(bclaim.sale)); } catch {}
-rec("payer binding: attacker paying a buyer's claim is refused, no funds move", atkStatus !== 200 && atkAfter === atkBefore && bVault === 0 && aborts.includes(bclaim.sale.toBase58()), `hook aborted=${aborts.includes(bclaim.sale.toBase58())} status=${atkStatus} attacker USDC ${atkBefore}->${atkAfter} vault=${bVault}`);
+rec("payer binding: attacker paying a buyer's claim is refused, no funds move", atkStatus !== 200 && atkAfter === atkBefore && bVault === 0 && aborts.includes(bclaim.sale.toBase58()), `hook aborted=${aborts.includes(bclaim.sale.toBase58())} status=${atkStatus} ${atkWhy} attacker USDC ${atkBefore}->${atkAfter} vault=${bVault}`);
+if (process.env.ONLY_PAYER) { console.log(`\n${results.filter(r => r.ok).length}/${results.length} passed (ONLY_PAYER)`); process.exit(0); }
 const { id: gid, claim: gclaim } = issueClaim({ price: 100_000 });
 const ok = await paidFetch("http://localhost:4022/paid", { headers: { "x-axia-claim": gid } });
 rec("payer binding: the bound buyer paying the same kind of claim still works", ok.status === 200, `status=${ok.status}`);
@@ -200,12 +220,14 @@ for (let i = 0; i < 8; i++) { try { issueClaim({ distributorKey: spammer, price:
 rec("spam: per-distributor claim rate limit kicks in", limited && issuedN === RATE.max, `issued ${issuedN} then limited (max ${RATE.max}/min)`);
 
 const closeIx = (sale) => program.methods.closeExpiredSale().accounts({ sale, saleVault: ata(sale), mint: USDC, campaign: campaignMain, rentPayer: payer.publicKey, tokenProgram: TOKEN_PROGRAM_ID }).rpc();
-const nx = crypto.randomBytes(32), nf = crypto.randomBytes(32), ex = nowS() + 14;
+const nx = crypto.randomBytes(32), nf = crypto.randomBytes(32), ex = nowS() + 40;
 await openSale({ campaign: campaignMain, nonce: nx, expiry: ex, price: 100_000 });
 await openSale({ campaign: campaignMain, nonce: nf, expiry: ex, price: 100_000 });
 const sx = salePda(campaignMain, nx), sf = salePda(campaignMain, nf);
 await transfer(conn, payer, buyerAta, ata(sf), payer, 100_000); // sf gets paid, sx never paid
-await expectFail("close_expired_sale before expiry rejected", () => closeIx(sx), "NotExpired");
+const timeLeft = ex - nowS();
+if (timeLeft < 3) throw new Error(`test setup too slow (only ${timeLeft}s of claim life left): cannot prove close-before-expiry; rerun`);
+await expectFail(`close_expired_sale before expiry rejected (${timeLeft}s of claim life left)`, () => closeIx(sx), "NotExpired");
 while (nowS() <= ex + 1) await sleep(1000);
 await expectFail("close_expired_sale refuses a funded vault (must settle instead)", () => closeIx(sf), "VaultNotEmpty");
 const rentBefore = await conn.getBalance(payer.publicKey);
@@ -217,11 +239,41 @@ await expectFail("claim replayed after its sale was closed is rejected (claim ex
 // -- 3. settlement sweeper: pay a vault directly (simulates gateway crash after payment), keeper settles it
 const nsw = crypto.randomBytes(32); await openSale({ campaign: campaignMain, nonce: nsw, expiry: nowS() + 3600, price: 100_000 });
 const ssw = salePda(campaignMain, nsw); await transfer(conn, payer, buyerAta, ata(ssw), payer, 100_000);
-const sw1 = await sweep({ program, conn, payer, mint: USDC });
+const swEarly = await sweep({ program, conn, payer, mint: USDC, only: [ssw] }); // only this sale, right away: its hold is still running
+rec("sweeper leaves a funded sale alone while its hold is active", swEarly.settled.length === 0 && swEarly.failed.length === 0 && (await program.account.sale.fetch(ssw)).status.open !== undefined, `settled ${swEarly.settled.length}; still Open, ${((await program.account.sale.fetch(ssw)).holdUntil.toNumber() - nowS())}s of hold left`);
+await expectFail("non-merchant settle during hold rejected", () => settle(campaignMain, ssw, distributor.publicKey, payer), "HoldActive");
+while (nowS() <= (await program.account.sale.fetch(ssw)).holdUntil.toNumber() + 1) await sleep(1000);
+const sw1 = await sweep({ program, conn, payer, mint: USDC, only: [ssw, sf] });
 const rcpt = await program.account.sale.fetch(ssw);
-rec("sweeper settles funded vaults the gateway never settled (incl. the expired-but-paid one)", sw1.settled.some((x) => x.sale === ssw.toBase58()) && sw1.settled.some((x) => x.sale === sf.toBase58()) && "settled" in rcpt.status, `settled ${sw1.settled.length}, failed ${sw1.failed.length}`);
-const sw2 = await sweep({ program, conn, payer, mint: USDC });
+rec("sweeper settles funded vaults after the hold (incl. the expired-but-paid one)", sw1.settled.length === 2 && sw1.settled.some((x) => x.sale === ssw.toBase58()) && sw1.settled.some((x) => x.sale === sf.toBase58()) && "settled" in rcpt.status, `settled ${sw1.settled.length}, failed ${sw1.failed.length}`);
+const sw2 = await sweep({ program, conn, payer, mint: USDC, only: [ssw, sf] });
 rec("sweeper is idempotent (second run settles nothing)", sw2.settled.length === 0 && sw2.failed.length === 0, `second run settled ${sw2.settled.length}, failed ${sw2.failed.length}`);
+
+// -- refund-safe release (REAL x402 payment, then the merchant refunds because "the service failed")
+{
+  const { id: rid, claim: rc } = issueClaim({ price: 100_000 });
+  const mBefore = await snap(), buyBefore = await bal(buyerAta), cBefore = await program.account.campaign.fetch(campaignMain);
+  const r = await paidFetch("http://localhost:4022/paid", { headers: { "x-axia-claim": rid } });
+  let v = 0; for (let i = 0; i < 10 && !v; i++) { try { v = await bal(ata(rc.sale)); } catch {} if (!v) await sleep(1500); }
+  rec("refund: buyer paid via x402 into the sale vault", r.status === 200 && v === 100_000, `status=${r.status} vault=${v}`);
+  await expectFail("refund: only the merchant can refund (payer wallet refused)", () => refund(campaignMain, rc.sale, payer), "");
+  await expectFail("refund: non-merchant cannot settle inside the hold", () => settle(campaignMain, rc.sale, distributor.publicKey, payer), "HoldActive");
+  const sig = await refund(campaignMain, rc.sale);
+  const mAfter = await snap(), buyAfter = await bal(buyerAta), s = await program.account.sale.fetch(rc.sale), cAfter = await program.account.campaign.fetch(campaignMain);
+  rec("refund: buyer made whole, nobody else paid", buyAfter === buyBefore && mAfter.m === mBefore.m && mAfter.d === mBefore.d && mAfter.f === mBefore.f, `buyer ${buyBefore}->${buyAfter}, merchant/dist/fee unchanged, refund tx ${sig}`);
+  rec("refund: receipt shows Refunded, no commission counted", "refunded" in s.status && s.gross.toNumber() === 100_000 && cAfter.commissionSpent.toString() === cBefore.commissionSpent.toString(), `status=${Object.keys(s.status)[0]} commissionSpent unchanged`);
+  rec("refund: public counters updated (refund rate = refunded / (settled+refunded))", cAfter.refundedCount.toNumber() === cBefore.refundedCount.toNumber() + 1, `settled=${cAfter.settledCount} refunded=${cAfter.refundedCount}`);
+  await expectFail("refund: settling a refunded sale is rejected", () => settle(campaignMain, rc.sale), "");
+  await expectFail("refund: refunding twice is rejected", () => refund(campaignMain, rc.sale), "");
+  // settled is final
+  const nS = crypto.randomBytes(32); await openSale({ campaign: campaignMain, nonce: nS, expiry: nowS() + 3600, price: 100_000 });
+  const sS = salePda(campaignMain, nS); await transfer(conn, payer, buyerAta, ata(sS), payer, 100_000);
+  await settle(campaignMain, sS);
+  await expectFail("refund: after settlement it is final (refund rejected)", () => refund(campaignMain, sS), "");
+  // empty vault
+  const nE = crypto.randomBytes(32); await openSale({ campaign: campaignMain, nonce: nE, expiry: nowS() + 3600, price: 100_000 });
+  await expectFail("refund: empty vault has nothing to refund", () => refund(campaignMain, salePda(campaignMain, nE)), "NothingToRefund");
+}
 
 http.close();
 console.log(`\n${results.filter(r => r.ok).length}/${results.length} passed`); process.exit(results.every(r => r.ok) ? 0 : 1);
