@@ -10,3 +10,6 @@ target/
 keypairs/
 .DS_Store
 spike/keys/
+
+# local secrets (fresh deploy keys); never commit
+.secrets/
