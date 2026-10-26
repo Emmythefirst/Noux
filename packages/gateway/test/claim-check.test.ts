@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import nacl from "tweetnacl";
-import { LocalKeySigner, signClaim, claimToWire, BRAND } from "@axia/core";
+import { LocalKeySigner, signClaim, claimToWire, BRAND } from "@noux/core";
 import { evaluateClaim, encodeClaimHeader, decodeClaimHeader, MAX_CLAIM_HEADER_BYTES, type ClaimExpectations } from "../src";
 
 const programId = Keypair.generate().publicKey, campaign = Keypair.generate().publicKey;
@@ -64,5 +64,5 @@ describe("evaluateClaim", () => {
       expect(evaluateClaim(g, expect_())).toEqual({ ok: false, reason: "malformed" });
     expect(decodeClaimHeader(Buffer.from("[]").toString("base64")).ok).toBe(false);
   });
-  it("header name comes from the brand constants", () => { expect(BRAND.claimHeader).toBe("x-axia-claim"); });
+  it("header name comes from the brand constants", () => { expect(BRAND.claimHeader).toBe("x-noux-claim"); });
 });

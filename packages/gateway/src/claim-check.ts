@@ -1,5 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
-import { claimFromWire, claimIsSelfConsistent, type ClaimWire, type SignedClaim } from "@axia/core";
+import { claimFromWire, claimIsSelfConsistent, type ClaimWire, type SignedClaim } from "@noux/core";
 
 export const MAX_CLAIM_HEADER_BYTES = 2048;
 

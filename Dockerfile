@@ -9,7 +9,7 @@ COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/core/package.json packages/core/
 COPY packages/gateway/package.json packages/gateway/
 COPY apps/api/package.json apps/api/
-RUN pnpm install --frozen-lockfile --filter @axia/api...
+RUN pnpm install --frozen-lockfile --filter @noux/api...
 
 FROM base AS run
 ENV NODE_ENV=production

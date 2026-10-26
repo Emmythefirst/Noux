@@ -13,8 +13,8 @@ import { x402Client, wrapFetchWithPayment, decodePaymentResponseHeader } from "@
 import { ExactSvmScheme as ExactSvmClient } from "@x402/svm/exact/client";
 import { createKeyPairSignerFromBytes } from "@solana/kit";
 import pg from "pg";
-import { BRAND, LocalKeySigner, OnchainCampaignReader, idl, signClaimRequest, salePda, claimFromWire, type ClaimWire } from "@axia/core";
-import { AnchorChain, AnchorKeeperChain, Keeper, createAxiaGateway, encodeClaimHeader, type GatewayEvent } from "@axia/gateway";
+import { BRAND, LocalKeySigner, OnchainCampaignReader, idl, signClaimRequest, salePda, claimFromWire, type ClaimWire } from "@noux/core";
+import { AnchorChain, AnchorKeeperChain, Keeper, createNouxGateway, encodeClaimHeader, type GatewayEvent } from "@noux/gateway";
 import { createPool, migrate } from "../src/db";
 import { createApp } from "../src/app";
 import { PgSeenStore } from "../src/seen-store";
@@ -54,7 +54,7 @@ await program.methods.createCampaign(cid, COMMISSION_BPS, FEE_BPS, new anchor.BN
 console.log("campaign:", campaign.toBase58());
 
 // ---------- claim-issuance API (real Postgres, real chain reader) ----------
-const pool = createPool(process.env.DATABASE_URL_TEST ?? "postgres://postgres:devonly@localhost:54329/axia");
+const pool = createPool(process.env.DATABASE_URL_TEST ?? "postgres://postgres:devonly@localhost:54329/noux");
 await migrate(pool); await pool.query("TRUNCATE claim_issuance, vault_first_seen");
 const signer = new LocalKeySigner(attest.secretKey);
 const campaigns = new OnchainCampaignReader(conn, PROGRAM, 1_000, 1_000);
@@ -76,7 +76,7 @@ const facilitator = new HTTPFacilitatorClient(createFacilitatorConfig(process.en
 const chain = new AnchorChain({ connection: conn, programId: PROGRAM, mint: USDC, gatewayPayer: buyer, merchant });
 async function startGateway(withSettler: boolean) {
   const events: GatewayEvent[] = [];
-  const gw = createAxiaGateway({
+  const gw = createNouxGateway({
     programId: PROGRAM, cluster: "devnet", campaign, mint: USDC, network: NET, merchantPayTo: merchant.publicKey, facilitator, connection: conn, campaigns,
     opener: chain, settler: withSettler ? chain : undefined, routes: { "GET /report": { price: PRICE, description: "e2e report" } }, onEvent: (e) => { events.push(e); if (e.type !== "facilitator" && process.env.VERBOSE) console.log("   gw:", JSON.stringify(e)); },
   });

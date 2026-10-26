@@ -3,7 +3,7 @@ import type pg from "pg";
 import { PublicKey } from "@solana/web3.js";
 import {
   signClaim, claimToWire, verifyClaimRequest, type CampaignReader, type ClaimSigner, type ClaimWire,
-} from "@axia/core";
+} from "@noux/core";
 import type { Config } from "./config";
 
 export class IssuanceError extends Error {
@@ -53,7 +53,7 @@ export async function issueClaim(d: Deps, req: ClaimRequest, ip: string): Promis
   const c = await d.pool.connect();
   try {
     await c.query("BEGIN");
-    await c.query("SELECT pg_advisory_xact_lock(hashtext('axia-claim-issuance'))");
+    await c.query("SELECT pg_advisory_xact_lock(hashtext('noux-claim-issuance'))");
     const { rows } = await c.query(
       `SELECT count(*) FILTER (WHERE distributor = $1)::int AS d, count(*) FILTER (WHERE buyer = $2)::int AS b,
               count(*) FILTER (WHERE ip = $3)::int AS i, count(*) FILTER (WHERE campaign = $4)::int AS c

@@ -3,8 +3,8 @@ import express from "express";
 import type { AddressInfo } from "node:net";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import nacl from "tweetnacl";
-import { LocalKeySigner, signClaim, claimToWire, salePda, BRAND, type CampaignInfo, type SignedClaim } from "@axia/core";
-import { createAxiaGateway, encodeClaimHeader, type GatewayEvent, type SaleOpener, type SaleSettler } from "../src";
+import { LocalKeySigner, signClaim, claimToWire, salePda, BRAND, type CampaignInfo, type SignedClaim } from "@noux/core";
+import { createNouxGateway, encodeClaimHeader, type GatewayEvent, type SaleOpener, type SaleSettler } from "../src";
 
 const NET = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
 const programId = Keypair.generate().publicKey, campaign = Keypair.generate().publicKey, mint = Keypair.generate().publicKey;
@@ -24,7 +24,7 @@ async function harness(): Promise<Harness> {
     verify: async () => { facCalls.push("verify"); return { isValid: true, payer }; },
     settle: async () => { facCalls.push("settle"); return { success: true, payer, transaction: "TXSIG", network: NET }; },
   };
-  const gw = createAxiaGateway({
+  const gw = createNouxGateway({
     programId, cluster: "devnet", campaign, mint, network: NET, merchantPayTo: merchantPay, facilitator, connection: {} as any,
     campaigns: { get: async () => info() }, opener, settler, routes: { "GET /data": { price: PRICE, description: "data" } },
     now: () => 1_800_000_000, onEvent: (e) => events.push(e),
@@ -90,7 +90,7 @@ describe("payTo selection", () => {
   it("if opening the sale fails the buyer can still buy: merchant gets paid, referral is lost", async () => {
     await h.close();
     const events: GatewayEvent[] = [];
-    const gw = createAxiaGateway({
+    const gw = createNouxGateway({
       programId, cluster: "devnet", campaign, mint, network: NET, merchantPayTo: merchantPay, connection: {} as any, campaigns: { get: async () => info() },
       opener: { ensureOpen: async () => { throw new Error("rpc down"); } }, routes: { "GET /data": { price: PRICE } }, now: () => 1_800_000_000, onEvent: (e) => events.push(e),
       facilitator: { getSupported: async () => ({ kinds: [{ x402Version: 2, scheme: "exact", network: NET, extra: { feePayer: Keypair.generate().publicKey.toBase58() } }], extensions: [], signers: {} }), verify: async () => ({ isValid: true }), settle: async () => ({ success: true, transaction: "t", network: NET, payer: "p" }) } as any,

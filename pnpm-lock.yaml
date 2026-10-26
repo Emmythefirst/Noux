@@ -10,15 +10,15 @@ importers:
 
   apps/api:
     dependencies:
-      '@axia/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@axia/gateway':
-        specifier: workspace:*
-        version: link:../../packages/gateway
       '@hono/node-server':
         specifier: ^1.13.0
         version: 1.19.17(hono@4.13.14)
+      '@noux/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@noux/gateway':
+        specifier: workspace:*
+        version: link:../../packages/gateway
       '@solana/web3.js':
         specifier: 1.99.0
         version: 1.99.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -108,7 +108,7 @@ importers:
       '@anchor-lang/core':
         specifier: ^1.2.1
         version: 1.2.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
-      '@axia/core':
+      '@noux/core':
         specifier: workspace:*
         version: link:../core
       '@solana/spl-token':

@@ -1,4 +1,4 @@
-// Axia devnet e2e. Positive path = REAL x402 payment via x402.org facilitator (real faucet USDC).
+// Noux devnet e2e. Positive path = REAL x402 payment via x402.org facilitator (real faucet USDC).
 // Negative + budget-cap tests call the program directly (budget test funds vaults by plain SPL transfer; labelled).
 import fs from "fs"; import os from "os"; import crypto from "crypto"; import express from "express";
 import * as anchor from "@anchor-lang/core";
@@ -14,7 +14,7 @@ import { sweep } from "./sweeper.mjs";
 
 const NET = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
 const USDC = new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
-const idl = JSON.parse(fs.readFileSync("../axia/target/idl/axia.json"));
+const idl = JSON.parse(fs.readFileSync("../program/target/idl/noux.json"));
 const PROG = new PublicKey(idl.address);
 const secret = Uint8Array.from(JSON.parse(fs.readFileSync(os.homedir() + "/.config/solana/id.json")));
 const payer = Keypair.fromSecretKey(secret); // also the BUYER and the gateway (rent payer)
@@ -36,7 +36,7 @@ const u64 = (n) => { const b = Buffer.alloc(8); b.writeBigUInt64LE(BigInt(n)); r
 const i64 = (n) => { const b = Buffer.alloc(8); b.writeBigInt64LE(BigInt(n)); return b; };
 
 function claimMsg(campaign, dist, buyer, expiry, price, nonce, { program = PROG, cluster = CLUSTER } = {}) {
-  return Buffer.concat([Buffer.from("AXIA-CLAIM-v1"), program.toBuffer(), cluster, campaign.toBuffer(), dist.toBuffer(), buyer.toBuffer(), i64(expiry), u64(price), Buffer.from(nonce)]);
+  return Buffer.concat([Buffer.from("NOUX-CLAIM-v1"), program.toBuffer(), cluster, campaign.toBuffer(), dist.toBuffer(), buyer.toBuffer(), i64(expiry), u64(price), Buffer.from(nonce)]);
 }
 const salePda = (campaign, nonce) => PublicKey.findProgramAddressSync([Buffer.from("sale"), campaign.toBuffer(), Buffer.from(nonce)], PROG)[0];
 const ed25519Ix = (msg, key = attest) => Ed25519Program.createInstructionWithPrivateKey({ privateKey: key.secretKey, message: msg });
@@ -110,15 +110,15 @@ server.onAfterVerify(async ({ requirements, result }) => {
   if (!cl || result.payer !== cl.buyer.toBase58()) { aborts.push(requirements.payTo); return { abort: true, reason: "payer_mismatch", message: "payer is not the buyer bound to this claim" }; }
 });
 const payTo = async (ctx) => { // runs on unpaid + paid request: idempotent
-  const cl = claims.get(ctx.adapter.getHeader("x-axia-claim"));
+  const cl = claims.get(ctx.adapter.getHeader("x-noux-claim"));
   const sale = salePda(campaignMain, cl.nonce);
   if (!(await conn.getAccountInfo(sale))) await openSale({ campaign: campaignMain, dist: cl.distributorKey, buyer: cl.buyer, nonce: cl.nonce, expiry: cl.expiry, price: cl.price });
   return sale.toBase58();
 };
 const app = express();
 app.use(paymentMiddleware({
-  "GET /paid": { accepts: [{ scheme: "exact", network: NET, payTo, price: "$0.10" }], description: "axia e2e" },
-  "GET /paid-odd": { accepts: [{ scheme: "exact", network: NET, payTo, price: "$0.033333" }], description: "axia e2e rounding" },
+  "GET /paid": { accepts: [{ scheme: "exact", network: NET, payTo, price: "$0.10" }], description: "noux e2e" },
+  "GET /paid-odd": { accepts: [{ scheme: "exact", network: NET, payTo, price: "$0.033333" }], description: "noux e2e rounding" },
 }, server));
 app.get("/paid", (_q, r) => r.json({ ok: true })); app.get("/paid-odd", (_q, r) => r.json({ ok: true }));
 const http = app.listen(4022); await new Promise(r => setTimeout(r, 1500));
@@ -128,7 +128,7 @@ const paidFetch = wrapFetchWithPayment(fetch, new x402Client().register("solana:
 async function x402Sale(route, price, label) {
   const { id, claim } = issueClaim({ price }); const nonce = claim.nonce;
   const before = await snap();
-  const res = await paidFetch(`http://localhost:4022${route}`, { headers: { "x-axia-claim": id } });
+  const res = await paidFetch(`http://localhost:4022${route}`, { headers: { "x-noux-claim": id } });
   const body = await res.text();
   const settle402 = res.headers.get("payment-response") ? decodePaymentResponseHeader(res.headers.get("payment-response")) : null;
   const sale = salePda(campaignMain, nonce);
@@ -198,7 +198,7 @@ const atkBefore = await bal(ata(attacker.publicKey));
 let atkStatus, atkWhy = "";
 for (let attempt = 1; attempt <= 4; attempt++) { // facilitator calls from the gateway can fail at the network level ("fetch failed"): retry those only
   try {
-    const ar = await atkFetch("http://localhost:4022/paid", { headers: { "x-axia-claim": bid } }); atkStatus = ar.status;
+    const ar = await atkFetch("http://localhost:4022/paid", { headers: { "x-noux-claim": bid } }); atkStatus = ar.status;
     const ph = ar.headers.get("payment-required"); const body = await ar.text();
     const why = ph ? JSON.parse(Buffer.from(ph, "base64").toString()).error : "-";
     atkWhy = `attempt ${attempt}: body=${body.slice(0, 120)} required.error=${why}`;
@@ -211,7 +211,7 @@ const atkAfter = await bal(ata(attacker.publicKey)); let bVault = 0; try { bVaul
 rec("payer binding: attacker paying a buyer's claim is refused, no funds move", atkStatus !== 200 && atkAfter === atkBefore && bVault === 0 && aborts.includes(bclaim.sale.toBase58()), `hook aborted=${aborts.includes(bclaim.sale.toBase58())} status=${atkStatus} ${atkWhy} attacker USDC ${atkBefore}->${atkAfter} vault=${bVault}`);
 if (process.env.ONLY_PAYER) { console.log(`\n${results.filter(r => r.ok).length}/${results.length} passed (ONLY_PAYER)`); process.exit(0); }
 const { id: gid, claim: gclaim } = issueClaim({ price: 100_000 });
-const ok = await paidFetch("http://localhost:4022/paid", { headers: { "x-axia-claim": gid } });
+const ok = await paidFetch("http://localhost:4022/paid", { headers: { "x-noux-claim": gid } });
 rec("payer binding: the bound buyer paying the same kind of claim still works", ok.status === 200, `status=${ok.status}`);
 
 // -- 4. spam cost: rate limit at claim issuance + close_expired_sale returns rent
@@ -253,7 +253,7 @@ rec("sweeper is idempotent (second run settles nothing)", sw2.settled.length ===
 {
   const { id: rid, claim: rc } = issueClaim({ price: 100_000 });
   const mBefore = await snap(), buyBefore = await bal(buyerAta), cBefore = await program.account.campaign.fetch(campaignMain);
-  const r = await paidFetch("http://localhost:4022/paid", { headers: { "x-axia-claim": rid } });
+  const r = await paidFetch("http://localhost:4022/paid", { headers: { "x-noux-claim": rid } });
   let v = 0; for (let i = 0; i < 10 && !v; i++) { try { v = await bal(ata(rc.sale)); } catch {} if (!v) await sleep(1500); }
   rec("refund: buyer paid via x402 into the sale vault", r.status === 200 && v === 100_000, `status=${r.status} vault=${v}`);
   await expectFail("refund: only the merchant can refund (payer wallet refused)", () => refund(campaignMain, rc.sale, payer), "");

@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import fs from "node:fs"; import os from "node:os"; import path from "node:path";
 import { Keypair, PublicKey } from "@solana/web3.js";
-import { LocalKeySigner, signClaimRequest, claimFromWire, claimIsSelfConsistent, type CampaignInfo, type CampaignReader } from "@axia/core";
+import { LocalKeySigner, signClaimRequest, claimFromWire, claimIsSelfConsistent, type CampaignInfo, type CampaignReader } from "@noux/core";
 import { createPool, migrate } from "../src/db";
 import { createApp } from "../src/app";
 import { issueClaim, IssuanceError, type Deps } from "../src/issuance";
 import { loadSigner } from "../src/keys";
 import { loadConfig } from "../src/config";
 
-const DB = process.env.DATABASE_URL_TEST ?? "postgres://postgres:devonly@localhost:54329/axia";
+const DB = process.env.DATABASE_URL_TEST ?? "postgres://postgres:devonly@localhost:54329/noux";
 const PROGRAM = "AC6AtoRALLszNGNLmHte2UXKzCqBYQKhPdtq5qs77nkL";
 const pool = createPool(DB);
 const attest = Keypair.generate(); const signer = new LocalKeySigner(attest.secretKey);
@@ -149,7 +149,7 @@ describe("http layer", () => {
 });
 
 describe("key + config hygiene", () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "axia-keys-"));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "noux-keys-"));
   it("refuses a key file readable by group/others, accepts mode 600", () => {
     const f = path.join(tmp, "k.json"); fs.writeFileSync(f, JSON.stringify([...attest.secretKey]), { mode: 0o644 }); fs.chmodSync(f, 0o644);
     expect(() => loadSigner({ ATTRIBUTION_KEY_FILE: f })).toThrow(/chmod 600/);

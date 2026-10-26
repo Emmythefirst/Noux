@@ -1,5 +1,5 @@
 import type pg from "pg";
-import type { SeenStore } from "@axia/gateway";
+import type { SeenStore } from "@noux/gateway";
 
 export const SEEN_MIGRATION = `CREATE TABLE IF NOT EXISTS vault_first_seen (
   sale TEXT PRIMARY KEY,

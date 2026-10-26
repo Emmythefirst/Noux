@@ -18,6 +18,10 @@ const schema = z.object({
   LIMIT_PER_BUYER_PER_MIN: num(10),
   LIMIT_PER_CAMPAIGN_PER_MIN: num(120),
   LIMIT_PER_IP_PER_MIN: num(60),
+  /** Optional embedded keeper: set BOTH to run the settlement keeper inside this process (saves a paid worker). */
+  MINT: z.string().min(32).optional(),
+  KEEPER_PAYER_B58: z.string().min(40).optional(),
+  KEEPER_TICK_SECONDS: num(10),
   /** Set to "1" only behind a proxy you control (Railway/Vercel): trusts X-Forwarded-For for the client IP. */
   TRUST_PROXY: z.enum(["0", "1"]).default("0"),
 });

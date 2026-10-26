@@ -1,4 +1,4 @@
-//! Axia spike: per-sale deposit accounts for x402 referral splits.
+//! Noux: per-sale deposit accounts for x402 referral splits.
 //!
 //! Flow: gateway calls `open_sale` with an ed25519-signed, buyer-bound claim.
 //! That creates a `Sale` PDA (claim terms stored on-chain) and its token account.
@@ -18,7 +18,7 @@ pub const MAX_FEE_BPS: u16 = 500;
 pub const MAX_HOLD_SECS: u32 = 600;
 
 #[program]
-pub mod axia {
+pub mod noux {
     use super::*;
 
     pub fn create_campaign(
@@ -31,10 +31,10 @@ pub mod axia {
         cluster: [u8; 8],
         hold_secs: u32,
     ) -> Result<()> {
-        require!(commission_bps <= MAX_COMMISSION_BPS, AxiaError::BpsTooHigh);
-        require!(fee_bps <= MAX_FEE_BPS, AxiaError::BpsTooHigh);
-        require!(hold_secs <= MAX_HOLD_SECS, AxiaError::HoldTooLong);
-        require!(commission_bps as u64 + fee_bps as u64 <= BPS, AxiaError::BpsTooHigh);
+        require!(commission_bps <= MAX_COMMISSION_BPS, NouxError::BpsTooHigh);
+        require!(fee_bps <= MAX_FEE_BPS, NouxError::BpsTooHigh);
+        require!(hold_secs <= MAX_HOLD_SECS, NouxError::HoldTooLong);
+        require!(commission_bps as u64 + fee_bps as u64 <= BPS, NouxError::BpsTooHigh);
         let c = &mut ctx.accounts.campaign;
         c.merchant = ctx.accounts.merchant.key();
         c.mint = ctx.accounts.mint.key();
@@ -63,12 +63,12 @@ pub mod axia {
     ) -> Result<()> {
         let c = &ctx.accounts.campaign;
         let now = Clock::get()?.unix_timestamp;
-        require!(now <= expiry, AxiaError::ClaimExpired);
+        require!(now <= expiry, NouxError::ClaimExpired);
         require!(
             ctx.accounts.distributor.key() != ctx.accounts.buyer.key(),
-            AxiaError::SelfReferral
+            NouxError::SelfReferral
         );
-        require!(price > 0, AxiaError::ZeroPrice);
+        require!(price > 0, NouxError::ZeroPrice);
 
         let msg = claim_message(
             ctx.program_id,
@@ -103,15 +103,15 @@ pub mod axia {
     /// Permissionless. Splits the sale account balance by the stored terms.
     pub fn settle_sale(ctx: Context<SettleSale>) -> Result<()> {
         let sale = &ctx.accounts.sale;
-        require!(sale.status == SaleStatus::Open, AxiaError::AlreadySettled);
+        require!(sale.status == SaleStatus::Open, NouxError::AlreadySettled);
         // Merchant (who has confirmed delivery) may settle immediately; everyone else waits out the hold.
         let is_merchant = ctx.accounts.caller.key() == ctx.accounts.campaign.merchant;
         require!(
             is_merchant || Clock::get()?.unix_timestamp >= sale.hold_until,
-            AxiaError::HoldActive
+            NouxError::HoldActive
         );
         let amount = ctx.accounts.sale_vault.amount;
-        require!(amount >= sale.price, AxiaError::Underpaid);
+        require!(amount >= sale.price, NouxError::Underpaid);
 
         let fee = mul_bps(amount, sale.fee_bps)?;
         let wanted = mul_bps(amount, sale.commission_bps)?;
@@ -121,9 +121,9 @@ pub mod axia {
         let merchant_amt = amount
             .checked_sub(fee)
             .and_then(|v| v.checked_sub(commission))
-            .ok_or(AxiaError::Math)?; // remainder (rounding dust) goes to merchant
-        c.commission_spent = c.commission_spent.checked_add(commission).ok_or(AxiaError::Math)?;
-        c.settled_count = c.settled_count.checked_add(1).ok_or(AxiaError::Math)?;
+            .ok_or(NouxError::Math)?; // remainder (rounding dust) goes to merchant
+        c.commission_spent = c.commission_spent.checked_add(commission).ok_or(NouxError::Math)?;
+        c.settled_count = c.settled_count.checked_add(1).ok_or(NouxError::Math)?;
 
         let campaign_key = sale.campaign;
         let seeds: &[&[u8]] = &[b"sale", campaign_key.as_ref(), sale.nonce.as_ref(), &[sale.bump]];
@@ -184,9 +184,9 @@ pub mod axia {
     /// no commission or fee. The sale stays on-chain as a `Refunded` receipt. After settlement it is final.
     pub fn refund_sale(ctx: Context<RefundSale>) -> Result<()> {
         let sale = &ctx.accounts.sale;
-        require!(sale.status == SaleStatus::Open, AxiaError::AlreadySettled);
+        require!(sale.status == SaleStatus::Open, NouxError::AlreadySettled);
         let amount = ctx.accounts.sale_vault.amount;
-        require!(amount > 0, AxiaError::NothingToRefund);
+        require!(amount > 0, NouxError::NothingToRefund);
         let seeds: &[&[u8]] = &[b"sale", sale.campaign.as_ref(), sale.nonce.as_ref(), &[sale.bump]];
         let signer = &[seeds];
         token::transfer(
@@ -211,7 +211,7 @@ pub mod axia {
             signer,
         ))?;
         let c = &mut ctx.accounts.campaign;
-        c.refunded_count = c.refunded_count.checked_add(1).ok_or(AxiaError::Math)?;
+        c.refunded_count = c.refunded_count.checked_add(1).ok_or(NouxError::Math)?;
         let s = &mut ctx.accounts.sale;
         s.status = SaleStatus::Refunded;
         s.gross = amount;
@@ -224,9 +224,9 @@ pub mod axia {
     /// Only after expiry: a closed sale's nonce can then never be replayed (claim is dead).
     pub fn close_expired_sale(ctx: Context<CloseExpiredSale>) -> Result<()> {
         let sale = &ctx.accounts.sale;
-        require!(sale.status == SaleStatus::Open, AxiaError::AlreadySettled);
-        require!(Clock::get()?.unix_timestamp > sale.expiry, AxiaError::NotExpired);
-        require!(ctx.accounts.sale_vault.amount == 0, AxiaError::VaultNotEmpty);
+        require!(sale.status == SaleStatus::Open, NouxError::AlreadySettled);
+        require!(Clock::get()?.unix_timestamp > sale.expiry, NouxError::NotExpired);
+        require!(ctx.accounts.sale_vault.amount == 0, NouxError::VaultNotEmpty);
         let seeds: &[&[u8]] = &[b"sale", sale.campaign.as_ref(), sale.nonce.as_ref(), &[sale.bump]];
         token::close_account(CpiContext::new_with_signer(
             ctx.accounts.token_program.key(),
@@ -247,7 +247,7 @@ fn mul_bps(amount: u64, bps: u16) -> Result<u64> {
 
 /// Domain-separated claim message: tag | program id | cluster | campaign | distributor |
 /// buyer | expiry | price | nonce  (13 + 32 + 8 + 32*3 + 8 + 8 + 32 = 197 bytes).
-pub const CLAIM_TAG: &[u8; 13] = b"AXIA-CLAIM-v1";
+pub const CLAIM_TAG: &[u8; 13] = b"NOUX-CLAIM-v1";
 pub fn claim_message(
     program_id: &Pubkey,
     cluster: &[u8; 8],
@@ -275,20 +275,20 @@ pub fn claim_message(
 /// verification of exactly (`signer`, `msg`).
 fn verify_ed25519_prev(ix_sysvar: &AccountInfo, signer: &Pubkey, msg: &[u8]) -> Result<()> {
     let cur = load_current_index_checked(ix_sysvar)? as usize;
-    require!(cur > 0, AxiaError::BadSignatureIx);
+    require!(cur > 0, NouxError::BadSignatureIx);
     let ix = load_instruction_at_checked(cur - 1, ix_sysvar)?;
-    require!(ix.program_id == ed25519_program::ID, AxiaError::BadSignatureIx);
+    require!(ix.program_id == ed25519_program::ID, NouxError::BadSignatureIx);
     let d = &ix.data;
-    require!(d.len() >= 16 && d[0] == 1, AxiaError::BadSignatureIx);
+    require!(d.len() >= 16 && d[0] == 1, NouxError::BadSignatureIx);
     let u16at = |o: usize| u16::from_le_bytes([d[o], d[o + 1]]) as usize;
     let (sig_ix, pk_off, pk_ix, msg_off, msg_len, msg_ix) =
         (u16at(4), u16at(6), u16at(8), u16at(10), u16at(12), u16at(14));
     // all data must live inside this very instruction (u16::MAX == "current ix")
     let m = u16::MAX as usize;
-    require!(sig_ix == m && pk_ix == m && msg_ix == m, AxiaError::BadSignatureIx);
-    require!(pk_off + 32 <= d.len() && msg_off + msg_len <= d.len(), AxiaError::BadSignatureIx);
-    require!(&d[pk_off..pk_off + 32] == signer.as_ref(), AxiaError::WrongSigner);
-    require!(&d[msg_off..msg_off + msg_len] == msg, AxiaError::ClaimMismatch);
+    require!(sig_ix == m && pk_ix == m && msg_ix == m, NouxError::BadSignatureIx);
+    require!(pk_off + 32 <= d.len() && msg_off + msg_len <= d.len(), NouxError::BadSignatureIx);
+    require!(&d[pk_off..pk_off + 32] == signer.as_ref(), NouxError::WrongSigner);
+    require!(&d[msg_off..msg_off + msg_len] == msg, NouxError::ClaimMismatch);
     Ok(())
 }
 
@@ -470,7 +470,7 @@ pub struct SaleSettled {
 }
 
 #[error_code]
-pub enum AxiaError {
+pub enum NouxError {
     #[msg("bps out of range")]
     BpsTooHigh,
     #[msg("claim expired")]

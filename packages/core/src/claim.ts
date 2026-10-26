@@ -3,7 +3,7 @@ import nacl from "tweetnacl";
 
 import { CLAIM_TAG, CLAIM_REQUEST_TAG, PROGRAM_CLAIM_TAG_LEN } from "./brand";
 
-/** Must match `claim_message` in programs/axia/src/lib.rs byte for byte. */
+/** Must match `claim_message` in program/programs/noux/src/lib.rs byte for byte. */
 export const CLAIM_MESSAGE_LEN = 184 + PROGRAM_CLAIM_TAG_LEN;
 export const CLUSTER_TAG_LEN = 8;
 

@@ -1,5 +1,5 @@
 import type { Connection, PublicKey } from "@solana/web3.js";
-import { BRAND, type CampaignReader, type SignedClaim } from "@axia/core";
+import { BRAND, type CampaignReader, type SignedClaim } from "@noux/core";
 import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import type { FacilitatorClient } from "@x402/core/server";
 import { ExactSvmScheme } from "@x402/svm/exact/server";
@@ -19,7 +19,7 @@ export type GatewayEvent =
 
 export interface RouteSpec { /** Price in base units of the campaign mint. */ price: bigint; description?: string }
 
-export interface AxiaGatewayConfig {
+export interface NouxGatewayConfig {
   programId: PublicKey;
   cluster: string;
   campaign: PublicKey;
@@ -51,7 +51,7 @@ const MAX_TRACKED = 10_000;
  *  - payer must equal the claim's buyer (checked after the facilitator verifies, before anything settles)
  *  - facilitator calls are wrapped in ResilientFacilitator (check-chain-before-retry settle)
  */
-export function createAxiaGateway(cfg: AxiaGatewayConfig) {
+export function createNouxGateway(cfg: NouxGatewayConfig) {
   const emit = (e: GatewayEvent) => { try { cfg.onEvent?.(e); } catch { /* observers must never break payments */ } };
   const now = cfg.now ?? (() => Math.floor(Date.now() / 1000));
   const merchant = cfg.merchantPayTo.toBase58();

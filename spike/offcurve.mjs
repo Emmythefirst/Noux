@@ -1,5 +1,5 @@
 // Spike step: will the x402.org facilitator settle a real devnet USDC payment into
-// a token account whose OWNER is an off-curve (PDA) address? No Axia program needed.
+// a token account whose OWNER is an off-curve (PDA) address? No Noux program needed.
 import fs from "fs"; import os from "os"; import crypto from "crypto";
 import express from "express";
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";

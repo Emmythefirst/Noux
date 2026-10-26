@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import bs58 from "bs58";
-import { LocalKeySigner, type ClaimSigner } from "@axia/core";
+import { LocalKeySigner, type ClaimSigner } from "@noux/core";
 import type { Config } from "./config";
 
 /**

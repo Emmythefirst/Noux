@@ -1,5 +1,5 @@
 {
-  "name": "@axia/gateway",
+  "name": "@noux/gateway",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@anchor-lang/core": "^1.2.1",
-    "@axia/core": "workspace:*",
+    "@noux/core": "workspace:*",
     "@solana/spl-token": "^0.4.0",
     "@solana/web3.js": "1.99.0",
     "@x402/core": "^2.28.0",

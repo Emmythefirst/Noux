@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-axia = "AC6AtoRALLszNGNLmHte2UXKzCqBYQKhPdtq5qs77nkL"
+noux = "AC6AtoRALLszNGNLmHte2UXKzCqBYQKhPdtq5qs77nkL"
 
 [provider]
 cluster = "localnet"

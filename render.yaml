@@ -1,0 +1,35 @@
+# Render Blueprint. Create via: Dashboard -> New -> Blueprint -> pick this repo.
+# `sync: false` values are asked for once at creation time; they are never stored in git.
+services:
+  - type: web
+    name: noux-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    region: frankfurt            # closest listed region to Lagos
+    plan: 0.5c-512mb             # a paid always-on plan: the free plan sleeps after 15 min idle (~1 min cold start), unusable for a live gateway
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: noux-db
+          property: connectionString
+      - key: PROGRAM_ID
+        value: AC6AtoRALLszNGNLmHte2UXKzCqBYQKhPdtq5qs77nkL
+      - key: CLUSTER
+        value: devnet              # 'mainnet' later, with a fresh attribution key and its own campaigns
+      - key: TRUST_PROXY
+        value: "1"
+      - key: RPC_URL
+        sync: false
+      - key: ATTRIBUTION_KEY_B58   # claim-signing key; fresh per cluster
+        sync: false
+      # Embedded settlement keeper (omit both to disable and run a separate worker instead)
+      - key: MINT
+        value: 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU   # devnet USDC
+      - key: KEEPER_PAYER_B58      # small SOL float; can only settle after the hold, cannot refund
+        sync: false
+
+databases:
+  - name: noux-db
+    region: frankfurt
+    plan: free                   # free Postgres EXPIRES after 30 days; upgrade before then if you keep it

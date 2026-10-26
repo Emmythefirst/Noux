@@ -1,7 +1,7 @@
 import { Connection, Ed25519Program, Keypair, PublicKey, SystemProgram, SYSVAR_INSTRUCTIONS_PUBKEY } from "@solana/web3.js";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from "@solana/spl-token";
 import * as anchor from "@anchor-lang/core";
-import { idl, salePda, type SignedClaim } from "@axia/core";
+import { idl, salePda, type SignedClaim } from "@noux/core";
 import type { LandedCheck } from "./resilient-facilitator";
 
 /** Everything the middleware needs from the chain, behind interfaces so it can be tested without one. */

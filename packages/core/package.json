@@ -1,5 +1,5 @@
 {
-  "name": "@axia/core",
+  "name": "@noux/core",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -8,7 +8,7 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "sync-idl": "cp ../../axia/target/idl/axia.json idl/axia.json"
+    "sync-idl": "cp ../../program/target/idl/noux.json idl/noux.json"
   },
   "dependencies": {
     "@solana/web3.js": "1.99.0",

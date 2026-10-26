@@ -20,7 +20,7 @@ export interface ResilientOptions {
   confirmDelaysMs?: number[];
   sleep?: (ms: number) => Promise<void>;
   /**
-   * Did this payment already land on-chain? For Axia: is the per-sale vault funded with >= the required amount.
+   * Did this payment already land on-chain? For Noux: is the per-sale vault funded with >= the required amount.
    * MUST read chain state only; it must never sign or send anything.
    */
   confirmLanded: (payload: Payload, requirements: Requirements) => Promise<LandedCheck>;
