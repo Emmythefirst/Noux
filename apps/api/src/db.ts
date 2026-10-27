@@ -20,7 +20,18 @@ export const MIGRATIONS = [
 ];
 
 import { SEEN_MIGRATION } from "./seen-store";
-MIGRATIONS.push(SEEN_MIGRATION);
+import { INDEXER_MIGRATIONS } from "./indexer/schema";
+MIGRATIONS.push(SEEN_MIGRATION, ...INDEXER_MIGRATIONS);
 
 export function createPool(url: string) { return new pg.Pool({ connectionString: url, max: 10 }); }
-export async function migrate(pool: pg.Pool) { for (const sql of MIGRATIONS) await pool.query(sql); }
+/** Serialised across processes: two instances starting together (a deploy overlap) must not race on CREATE TABLE IF NOT EXISTS. */
+export async function migrate(pool: pg.Pool) {
+  const c = await pool.connect();
+  try {
+    await c.query("SELECT pg_advisory_lock(hashtext('noux-migrations'))");
+    for (const sql of MIGRATIONS) await c.query(sql);
+  } finally {
+    try { await c.query("SELECT pg_advisory_unlock(hashtext('noux-migrations'))"); } catch { /* connection closing */ }
+    c.release();
+  }
+}

@@ -22,6 +22,10 @@ const schema = z.object({
   MINT: z.string().min(32).optional(),
   KEEPER_PAYER_B58: z.string().min(40).optional(),
   KEEPER_TICK_SECONDS: num(10),
+  /** Indexer (public directory/receipts). Runs inside this process. */
+  ENABLE_INDEXER: z.enum(["0", "1"]).default("1"),
+  INDEXER_INTERVAL_SECONDS: num(20),
+  MINT_DECIMALS: z.coerce.number().int().min(0).max(18).default(6),
   /** Set to "1" only behind a proxy you control (Railway/Vercel): trusts X-Forwarded-For for the client IP. */
   TRUST_PROXY: z.enum(["0", "1"]).default("0"),
 });

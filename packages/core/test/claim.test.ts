@@ -100,3 +100,26 @@ describe("pda", () => {
     expect(PublicKey.isOnCurve(salePda(programId, c, n).toBytes())).toBe(false);
   });
 });
+
+import { signListing, verifyListing, listingHash, canonicalListing, type Listing } from "../src";
+describe("signed listing", () => {
+  const merchant = Keypair.generate(); const campaign = mk();
+  const listing: Listing = { name: "Sample brief", description: "d", category: "data-feeds", endpointUrl: "https://x.example/api", route: "GET /report", displayPrice: "$0.10", isSample: true };
+  const a = { campaign, listing, ts: 1_800_000_000 };
+  it("hash is order-independent and covers every field", () => {
+    expect(listingHash({ ...listing })).toBe(listingHash(JSON.parse(JSON.stringify(listing))));
+    const base = listingHash(listing);
+    for (const mut of [{ name: "x" }, { description: "x" }, { category: "other" as const }, { endpointUrl: "https://evil.example" }, { route: "GET /x" }, { displayPrice: "$9" }, { isSample: false }, { website: "https://w.example" }])
+      expect(listingHash({ ...listing, ...mut })).not.toBe(base);
+    expect(canonicalListing(listing)).not.toContain("website");
+  });
+  it("accepts the campaign merchant within skew; rejects anyone else, stale, altered, other-campaign", () => {
+    const sig = signListing(merchant.secretKey, a);
+    expect(verifyListing(a, sig, merchant.publicKey, a.ts + 10)).toBe(true);
+    expect(verifyListing(a, sig, mk(), a.ts)).toBe(false);
+    expect(verifyListing(a, sig, merchant.publicKey, a.ts + 61)).toBe(false);
+    expect(verifyListing({ ...a, listing: { ...listing, endpointUrl: "https://evil.example" } }, sig, merchant.publicKey, a.ts)).toBe(false);
+    expect(verifyListing({ ...a, campaign: mk() }, sig, merchant.publicKey, a.ts)).toBe(false);
+    expect(verifyListing(a, signListing(Keypair.generate().secretKey, a), merchant.publicKey, a.ts)).toBe(false);
+  });
+});
