@@ -68,6 +68,22 @@ services:
       - key: CDP_API_KEY_SECRET
         sync: false
 
+  # ---- web app (static site: Vite + React). No server, no secrets. VITE_API_URL is baked in at build time.
+  - type: web
+    name: noux-web
+    runtime: static
+    rootDir: apps/web
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --filter @noux/web... --dir ../.. && pnpm run build
+    staticPublishPath: dist
+    pullRequestPreviewsEnabled: false
+    envVars:
+      - key: VITE_API_URL
+        value: https://noux-api.onrender.com/v1
+    routes:
+      - type: rewrite        # single-page app: every path serves index.html
+        source: /*
+        destination: /index.html
+
 databases:
   - name: noux-db
     region: frankfurt

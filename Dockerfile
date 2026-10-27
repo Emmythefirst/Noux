@@ -10,7 +10,9 @@ COPY packages/core/package.json packages/core/
 COPY packages/gateway/package.json packages/gateway/
 COPY apps/api/package.json apps/api/
 COPY apps/demo-merchant/package.json apps/demo-merchant/
-RUN pnpm install --frozen-lockfile
+COPY apps/web/package.json apps/web/
+# the web app is a static site built elsewhere; keep its dependencies out of this image
+RUN pnpm install --frozen-lockfile --filter @noux/api... --filter @noux/demo-merchant...
 
 FROM base AS run
 ENV NODE_ENV=production
