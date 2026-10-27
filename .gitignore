@@ -1,5 +1,6 @@
 # Local-only session log. NEVER commit.
 progress.md
+DECISIONS.md
 
 node_modules/
 target/
