@@ -165,12 +165,15 @@ export function publicRoutes(d: PublicDeps) {
     const conc = (await d.pool.query(`SELECT coalesce(max(n)::float / NULLIF(sum(n), 0), 0) share FROM (SELECT count(*) n FROM idx_sales WHERE distributor = $1 AND status = 'settled' GROUP BY buyer) t`, [a])).rows[0].share;
     const by = (await d.pool.query(`SELECT campaign, count(*) FILTER (WHERE status='settled')::int purchases, coalesce(sum(commission_amount) FILTER (WHERE status='settled'),0) earned FROM idx_sales WHERE distributor = $1 GROUP BY campaign ORDER BY 3 DESC LIMIT 20`, [a])).rows;
     const recent = (await d.pool.query(`SELECT ${RJ} ${RFROM} WHERE s.distributor = $1 ORDER BY COALESCE(s.settled_at, s.opened_at) DESC LIMIT 20`, [a])).rows;
+    // claims issued (off-chain, server-side record) vs sales that reached a payment (vault funded: settled, refunded or still held)
+    const issued = (await d.pool.query(`SELECT count(*)::int n FROM claim_issuance WHERE distributor = $1`, [a])).rows[0].n;
+    const paid = (await d.pool.query(`SELECT count(*)::int n FROM idx_sales WHERE distributor = $1 AND gross > 0`, [a])).rows[0].n;
     cache(c);
     return c.json({
       distributor: a, decimals: d.decimals, disclosure: DISCLOSURE,
       // plain, checkable numbers instead of a composite "trust score"
       metrics: { eligiblePurchases: st.purchases, refunded: st.refunded, open: st.open, totalEarned: String(st.earned), referredVolume: String(st.volume), distinctBuyers: st.distinct_buyers, campaigns: st.campaigns, topBuyerShare: Number(Number(conc).toFixed(4)) },
-      byCampaign: by.map((r) => ({ campaign: r.campaign, purchases: r.purchases, earned: String(r.earned) })), recent: recent.map(receipt),
+      claims: { issued, paid }, byCampaign: by.map((r) => ({ campaign: r.campaign, purchases: r.purchases, earned: String(r.earned) })), recent: recent.map(receipt),
     });
   });
 

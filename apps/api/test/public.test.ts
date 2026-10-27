@@ -178,6 +178,10 @@ describe("public API: distributors and stats", () => {
     expect(r.metrics).toMatchObject({ eligiblePurchases: 3, totalEarned: "34999", referredVolume: "233333", distinctBuyers: 2, campaigns: 2, open: 1 }); // S1,S2 (A) + SB (B); S5 is open
     expect(r.byCampaign.map((x: any) => x.campaign).sort()).toEqual([A, B].sort());
     expect(JSON.stringify(r)).not.toMatch(/trust|reputation|score/i);
+    // claims issued is the server's own record; paid counts sales whose vault was funded (S5 is open and unfunded)
+    for (let i = 0; i < 5; i++) await pool.query(`INSERT INTO claim_issuance (campaign, distributor, buyer, ip, price, nonce, expiry) VALUES ($1,$2,$3,'1.1.1.1',100000,$4,to_timestamp($5))`, [A, d1, b1, `n${i}`, NOW + 600]);
+    expect((await get(mkApp(), `/v1/distributors/${d1}`)).body.claims).toEqual({ issued: 5, paid: 3 });
+    expect((await get(mkApp(), `/v1/distributors/${d2}`)).body.claims).toEqual({ issued: 0, paid: 2 });
     expect((await get(mkApp(), `/v1/distributors/${d2}`)).body.metrics).toMatchObject({ eligiblePurchases: 1, refunded: 1, totalEarned: "5000" });
     expect((await get(mkApp(), `/v1/distributors/${kp()}`)).body.metrics).toMatchObject({ eligiblePurchases: 0, totalEarned: "0" }); // unknown = empty, not an error
   });
