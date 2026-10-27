@@ -19,16 +19,20 @@ const schema = z.object({
   FACILITATOR: z.enum(["cdp", "x402.org"]).default("cdp"),
   CDP_API_KEY_ID: z.string().optional(),
   CDP_API_KEY_SECRET: z.string().optional(),
+  /** Same secret, hex-encoded (only 0-9a-f). Wins over CDP_API_KEY_SECRET when set. Immune to paste/parser mangling of '+', '/', '='. */
+  CDP_API_KEY_SECRET_HEX: z.string().regex(/^[0-9a-fA-F]+$/, "must be hex").optional(),
   /** Where buyers/agents request claims. Shown in /v1/info. */
   CLAIMS_API_URL: z.string().url().default("https://noux-api.onrender.com"),
   PUBLIC_URL: z.string().url().optional(),
 }).superRefine((v, ctx) => {
-  if (v.FACILITATOR === "cdp" && (!v.CDP_API_KEY_ID || !v.CDP_API_KEY_SECRET)) ctx.addIssue({ code: "custom", path: ["CDP_API_KEY_ID"], message: "required when FACILITATOR=cdp" });
+  if (v.FACILITATOR === "cdp" && (!v.CDP_API_KEY_ID || !(v.CDP_API_KEY_SECRET || v.CDP_API_KEY_SECRET_HEX))) ctx.addIssue({ code: "custom", path: ["CDP_API_KEY_ID"], message: "required when FACILITATOR=cdp" });
   if (!NETWORKS[v.CLUSTER]) ctx.addIssue({ code: "custom", path: ["CLUSTER"], message: "must be devnet or mainnet" });
 });
 export type Config = z.infer<typeof schema> & { NETWORK: string };
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
   const r = schema.safeParse(env);
   if (!r.success) throw new Error("invalid configuration: " + r.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")); // names only, never values
-  return { ...r.data, NETWORK: NETWORKS[r.data.CLUSTER] };
+  const d = r.data;
+  if (d.CDP_API_KEY_SECRET_HEX) d.CDP_API_KEY_SECRET = Buffer.from(d.CDP_API_KEY_SECRET_HEX, "hex").toString("utf8");
+  return { ...d, NETWORK: NETWORKS[d.CLUSTER] };
 }

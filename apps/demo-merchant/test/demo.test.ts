@@ -49,6 +49,15 @@ describe("config", () => {
     expect(() => loadConfig({ ...base, CDP_API_KEY_ID: undefined })).toThrow(/CDP_API_KEY_ID/);
     expect(loadConfig({ ...base, FACILITATOR: "x402.org", CDP_API_KEY_ID: undefined, CDP_API_KEY_SECRET: undefined }).FACILITATOR).toBe("x402.org");
   });
+  it("accepts the CDP secret as hex and decodes it to the exact original (immune to paste mangling)", () => {
+    const secret = "ab+cd/ef==+Zz09";
+    const hex = Buffer.from(secret, "utf8").toString("hex");
+    expect(hex).toMatch(/^[0-9a-f]+$/);
+    expect(loadConfig({ ...base, CDP_API_KEY_SECRET: undefined, CDP_API_KEY_SECRET_HEX: hex }).CDP_API_KEY_SECRET).toBe(secret);
+    expect(loadConfig({ ...base, CDP_API_KEY_SECRET: "corrupted", CDP_API_KEY_SECRET_HEX: hex }).CDP_API_KEY_SECRET).toBe(secret); // hex wins
+    expect(() => loadConfig({ ...base, CDP_API_KEY_SECRET: undefined, CDP_API_KEY_SECRET_HEX: "zz" })).toThrow(/CDP_API_KEY_SECRET_HEX/);
+    expect(() => loadConfig({ ...base, CDP_API_KEY_SECRET: undefined })).toThrow(/CDP_API_KEY_ID/); // neither form given
+  });
   it("rejects unknown clusters and never echoes secret values in errors", () => {
     expect(() => loadConfig({ ...base, CLUSTER: "testnet" })).toThrow(/CLUSTER/);
     try { loadConfig({ ...base, RPC_URL: "not a url", GATEWAY_PAYER_B58: "SUPERSECRETKEYMATERIAL" }); throw new Error("no throw"); }
