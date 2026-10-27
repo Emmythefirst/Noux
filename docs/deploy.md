@@ -16,7 +16,7 @@ Postgres database, and asks you once for the three secrets (`RPC_URL`, `ATTRIBUT
 | Private Services, Cron Jobs, Key Value, Workflow | not needed |
 
 Web Service settings: Language **Docker**, Dockerfile Path `./Dockerfile`, Health Check Path `/healthz`, Region Frankfurt
-(same region as the database so the internal connection string works), plan **paid, always-on**.
+(same region as the database so the internal connection string works), plan **Free** (works, with the sleep trade-off below) or the paid always-on plan.
 
 ## Environment variables
 | Variable | Value |
@@ -33,7 +33,9 @@ Web Service settings: Language **Docker**, Dockerfile Path `./Dockerfile`, Healt
 Render turns env vars into Docker build args too; the Dockerfile never references any of them, so no secret enters an image layer.
 
 ## Costs and limits (from Render's docs; verify current prices yourself)
-- Free web services **spin down after 15 min idle and take ~1 min to wake**: do not use the free plan for the gateway/API.
+- Free web services **spin down after 15 min idle and take ~1 min to wake**. Workable for development and a demo if you ping `/healthz` every ~10 min (an external uptime monitor); free hours (750/month) are shared across the whole workspace.
+- While asleep the embedded keeper does not run. The merchant gateway settles right after delivery, so the main flow is unaffected; the keeper catches up on wake.
+- The CDP key (`CDP_API_KEY_ID/SECRET`) is NOT needed on this service: it never calls the facilitator. It belongs to the merchant gateway service.
 - Free Postgres: 1 GB, **expires 30 days after creation** (+14-day grace), no backups. Fine through the hackathon; upgrade or recreate after.
 - Background workers have **no free tier**: another reason to embed the keeper.
 

@@ -6,7 +6,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     region: frankfurt            # closest listed region to Lagos
-    plan: 0.5c-512mb             # a paid always-on plan: the free plan sleeps after 15 min idle (~1 min cold start), unusable for a live gateway
+    plan: free                   # sleeps after 15 min idle (~1 min wake). Ping /healthz every ~10 min to keep it warm; upgrade to 0.5c-512mb ($7/mo) for always-on
     healthCheckPath: /healthz
     envVars:
       - key: DATABASE_URL
