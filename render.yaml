@@ -29,6 +29,44 @@ services:
       - key: KEEPER_PAYER_B58      # small SOL float; can only settle after the hold, cannot refund
         sync: false
 
+  # ---- sample merchant: a separate service that sells two clearly-labelled SAMPLE endpoints through the Noux gateway.
+  # Keep the service name `noux-demo-merchant` (the directory listing points at https://noux-demo-merchant.onrender.com).
+  - type: web
+    name: noux-demo-merchant
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: sh -c "cd ../demo-merchant && ./node_modules/.bin/tsx src/server.ts"
+    region: frankfurt
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: PROGRAM_ID
+        value: AC6AtoRALLszNGNLmHte2UXKzCqBYQKhPdtq5qs77nkL
+      - key: CLUSTER
+        value: devnet
+      - key: MINT
+        value: 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU
+      - key: FACILITATOR
+        value: cdp
+      - key: CLAIMS_API_URL
+        value: https://noux-api.onrender.com
+      - key: PUBLIC_URL
+        value: https://noux-demo-merchant.onrender.com
+      - key: RPC_URL
+        sync: false
+      - key: CAMPAIGN
+        sync: false
+      - key: MERCHANT_PAYTO
+        sync: false
+      - key: GATEWAY_PAYER_B58
+        sync: false
+      - key: MERCHANT_SIGNER_B58
+        sync: false
+      - key: CDP_API_KEY_ID
+        sync: false
+      - key: CDP_API_KEY_SECRET
+        sync: false
+
 databases:
   - name: noux-db
     region: frankfurt

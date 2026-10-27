@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "devnet-e2e": "tsx scripts/devnet-e2e.ts",
     "keeper": "tsx src/keeper.ts",
-    "live-check": "tsx scripts/live-check.ts"
+    "live-check": "tsx scripts/live-check.ts",
+    "setup-demo-merchant": "tsx scripts/setup-demo-merchant.ts",
+    "demo-buy": "tsx scripts/demo-buy.ts"
   },
   "dependencies": {
     "@noux/core": "workspace:*",

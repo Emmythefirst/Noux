@@ -1,0 +1,23 @@
+{
+  "name": "@noux/demo-merchant",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@coinbase/x402": "^2.1.0",
+    "@noux/core": "workspace:*",
+    "@noux/gateway": "workspace:*",
+    "@solana/web3.js": "1.99.0",
+    "@x402/core": "^2.28.0",
+    "bs58": "^6.0.0",
+    "express": "^5.0.0",
+    "tsx": "^4.19.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": { "@types/express": "^5.0.0", "@types/node": "^22.0.0", "typescript": "^5.7.3", "vitest": "^3.0.0", "tweetnacl": "^1.0.3" }
+}
