@@ -35,11 +35,12 @@ services:
     name: noux-demo-merchant
     runtime: docker
     dockerfilePath: ./Dockerfile
-    dockerCommand: sh -c "cd ../demo-merchant && ./node_modules/.bin/tsx src/server.ts"
     region: frankfurt
     plan: free
     healthCheckPath: /healthz
     envVars:
+      - key: APP                   # selects which app the shared image runs (see scripts/start.sh)
+        value: demo-merchant
       - key: PROGRAM_ID
         value: AC6AtoRALLszNGNLmHte2UXKzCqBYQKhPdtq5qs77nkL
       - key: CLUSTER

@@ -22,7 +22,9 @@ COPY packages/core ./packages/core
 COPY packages/gateway ./packages/gateway
 COPY apps/api ./apps/api
 COPY apps/demo-merchant ./apps/demo-merchant
+COPY scripts/start.sh /app/start.sh
+RUN chmod 755 /app/start.sh
 WORKDIR /app/apps/api
 USER node
 EXPOSE 8787
-CMD ["./node_modules/.bin/tsx", "src/server.ts"]
+CMD ["/app/start.sh"]
