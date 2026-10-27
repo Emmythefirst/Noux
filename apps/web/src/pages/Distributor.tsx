@@ -148,7 +148,7 @@ export default function Distributor() {
           </div>
           <div style={st("flex: 1 1 240px; display: grid; grid-template-rows: repeat(3, auto); gap: 12px;")}>
             {[
-              ["Open sales", String(m.open), "Held, or waiting to be settled"],
+              info.claims ? ["Claims issued → paid", `${info.claims.issued} → ${info.claims.paid}`, info.claims.issued === 0 ? "No claims on record for this address" : info.claims.paid > info.claims.issued ? "More payments than claims on record: some predate this record" : `${Math.round((info.claims.paid / info.claims.issued) * 100)}% of claims ended in a payment`] : ["Open sales", String(m.open), "Held, or waiting to be settled"],
               ["Distinct buyers", String(m.distinctBuyers), "Wallets that paid through you"],
               ["Refunded sales", String(m.refunded), closed ? `${((m.refunded / closed) * 100).toFixed(1)}% of your closed sales` : "No closed sales yet"],
             ].map(([k, v, n]) => (

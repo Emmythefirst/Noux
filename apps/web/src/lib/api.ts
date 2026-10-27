@@ -45,6 +45,7 @@ export interface IndexInfo { lastSyncedAt: string | null; ageSeconds: number | n
 export interface DistributorInfo {
   distributor: string; decimals: number; disclosure: string;
   metrics: { eligiblePurchases: number; refunded: number; open: number; totalEarned: string; referredVolume: string; distinctBuyers: number; campaigns: number; topBuyerShare: number };
+  claims: { issued: number; paid: number };
   byCampaign: { campaign: string; purchases: number; earned: string }[];
   recent: Receipt[];
 }

@@ -1,7 +1,8 @@
-import { useEffect, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { st } from "../lib/css";
 import { ApiError, explorerAddr, useApi, useCopy, useNow, type Campaign, type Receipt } from "../lib/api";
+import { verifyReceipt, type StepState } from "../lib/verify";
 import { fmtAmount, fullUtc, mmss, short, pctOf } from "../lib/format";
 import { openText, Addr, CopyIcon, Disclosure, ErrorState, Page, SampleBadge, STATUS_COLORS, TopNav, WakingBanner } from "../components/common";
 
@@ -25,25 +26,63 @@ export function LatestReceipt() {
   );
 }
 
-function Verify() {
-  // The proposed browser-side verification (read the sale account from Solana RPC and re-do the math) is not built yet.
-  // The section stays in the layout so the page matches the design, but it says so instead of pretending to run.
-  const labels = ["Claim signature is valid for this campaign", "Payer equals the buyer named in the claim", "Split matches the on-chain terms", "Parts add up to exactly the amount paid"];
+const CHECK_LABELS = ["Claim signature is valid for this campaign", "Payer equals the buyer named in the claim", "Split matches the on-chain terms", "Parts add up to exactly the amount paid"];
+
+function Verify({ r }: { r: Receipt }) {
+  const [results, setResults] = useState<StepState[] | null>(null);
+  const [shown, setShown] = useState(-1); // how many results have been revealed (reveal is paced for readability; the results are already final)
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const run = async () => {
+    if (busy) return;
+    setBusy(true); setErr(null); setResults(null); setShown(0);
+    try {
+      const res = await verifyReceipt({ sale: r.sale, openTx: r.links.open, paymentTx: r.links.payment, apiGross: r.gross, apiSplit: r.split });
+      setResults(res);
+      const reveal = (n: number) => { setShown(n); if (n < res.length) timer.current = setTimeout(() => reveal(n + 1), 260); else setBusy(false); };
+      reveal(1);
+    } catch (e) { setErr((e as Error).message || "RPC unavailable"); setBusy(false); setShown(-1); }
+  };
+
+  const revealed = results ? results.slice(0, shown) : [];
+  const finished = !!results && shown >= results.length;
+  const anyFail = revealed.some((x) => x.state === "fail");
+  const label = busy ? "Checking…" : finished ? (anyFail ? "Check failed · run again" : "Verified · run again") : "Verify receipt";
   return (
     <section aria-labelledby="v-h" style={st("background: #FFFFFF; border: 1px solid #EBEBEB; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 16px;")}>
       <div style={st("display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between;")}>
         <div style={st("display: flex; flex-direction: column; gap: 4px; max-width: 520px;")}>
           <h2 id="v-h" style={st("font-size: 16px; line-height: 20px; letter-spacing: -0.01em; font-weight: 500; color: #111111;")}>Don’t trust this page. Check it.</h2>
-          <p style={st("font-size: 14px; line-height: 20px; color: #6B6B6B;")}>One-click verification in your browser isn’t built yet. Until it is, every address and transaction above opens in the Solana explorer, where you can read the same numbers yourself.</p>
+          <p style={st("font-size: 14px; line-height: 20px; color: #6B6B6B;")}>Your browser reads the sale account and the two transactions straight from a Solana node and re-does the checks. No Noux server is involved in the checks.</p>
         </div>
-        <button className="press bi" type="button" disabled aria-disabled="true" title="Not built yet" style={st("height: 40px; padding: 0 16px; border: 0; border-radius: 10px; background: #111111; color: #FFFFFF; font: 500 14px Inter, sans-serif; opacity: .45; display: inline-flex; align-items: center; justify-content: center; min-width: 168px;")}>Verify receipt · soon</button>
+        <button className="press bi" type="button" onClick={run} aria-busy={busy} style={st("height: 40px; padding: 0 16px; border: 0; border-radius: 10px; background: #111111; color: #FFFFFF; font: 500 14px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; min-width: 168px; justify-content: center;")}>
+          {busy && <svg className="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.56" /></svg>}
+          {label}
+        </button>
       </div>
-      <ul style={st("list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr)); gap: 0 24px;")}>
-        {labels.map((l) => (
-          <li key={l} style={st("display: flex; gap: 10px; align-items: center; min-height: 44px; border-top: 1px solid #EBEBEB; font-size: 14px; color: #6B6B6B;")}>
-            <span aria-hidden="true" style={st("width: 20px; height: 20px; flex: none; border-radius: 9999px; border: 1.5px solid #D4D4D8;")} />{l}
-          </li>
-        ))}
+      {err && <p role="alert" style={st("font-size: 13px; color: #B42318;")}>Couldn’t reach a Solana node ({err}). Try again in a moment.</p>}
+      <ul role="status" style={st("list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr)); gap: 0 24px;")}>
+        {CHECK_LABELS.map((l, i) => {
+          const res = i < shown ? results?.[i] : undefined;
+          const active = busy && i === Math.max(0, shown) && (!results || i >= shown);
+          const bg = res?.state === "pass" ? "#15B042" : res?.state === "fail" ? "#D92D20" : res?.state === "skip" ? "#D4D4D8" : undefined;
+          return (
+            <li key={l} style={st("display: flex; gap: 10px; align-items: flex-start; min-height: 44px; padding: 12px 0; border-top: 1px solid #EBEBEB; font-size: 14px;")}>
+              <span style={{ ...st("width: 20px; height: 20px; flex: none; border-radius: 9999px; display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; transition: background-color 200ms;"), ...(bg ? { background: bg } : active ? { border: "2px solid #0F766E", borderRightColor: "transparent" } : { border: "1.5px solid #D4D4D8" }) }}>
+                {res?.state === "pass" && <svg className="chk" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="3" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>}
+                {res?.state === "fail" && <svg className="chk" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="3" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>}
+                {res?.state === "skip" && <span aria-hidden="true" style={st("width: 8px; height: 2px; background: #FFFFFF; border-radius: 1px;")} />}
+              </span>
+              <span style={st("display: flex; flex-direction: column; gap: 2px;")}>
+                <span style={{ color: res?.state === "pass" ? "#111111" : res?.state === "fail" ? "#B42318" : "#6B6B6B" }}>{l}{res?.state === "skip" ? " · not applicable" : ""}{res?.state === "fail" ? " · failed" : ""}</span>
+                {res?.detail && <span className="tn" style={st("font-size: 12px; color: #6B6B6B;")}>{res.detail}</span>}
+              </span>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
@@ -220,7 +259,7 @@ export default function ReceiptPage() {
           </div>
         </article>
 
-        <Verify />
+        <Verify r={r} />
 
         <section style={st("display: flex; flex-direction: column; gap: 6px; padding: 0 4px;")}>
           <h2 style={st("font-size: 13px; font-weight: 500; color: #111111;")}>About refunds</h2>
