@@ -9,7 +9,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "devnet-e2e": "tsx scripts/devnet-e2e.ts",
-    "keeper": "tsx src/keeper.ts"
+    "keeper": "tsx src/keeper.ts",
+    "live-check": "tsx scripts/live-check.ts"
   },
   "dependencies": {
     "@noux/core": "workspace:*",
