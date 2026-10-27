@@ -130,7 +130,7 @@ export default function Docs() {
             </figure>
 
             <h2 id="campaign" style={st(H2)}>2. Create a campaign</h2>
-            <p style={st("color: #333333;")}>A campaign sets your terms on-chain. Commission is at most 50%, the protocol fee at most 5%, and the hold at most 600 seconds. The commission budget is a cap on what you can pay out in commission, not money held in escrow. You can also do this from the <Link to="/app/merchant">merchant console</Link>.</p>
+            <p style={st("color: #333333;")}>A campaign sets your terms on-chain. Commission is at most 50% and the hold at most 600 seconds. The protocol fee is set by the program (at most 5%) and copied into your campaign when you create it; you can’t change it or point it at your own wallet. The commission budget is a cap on what you can pay out in commission, not money held in escrow. You can also do this from the <Link to="/app/merchant">merchant console</Link>.</p>
             <figure style={st(FIG)}>
               <figcaption style={st("height: 40px; display: flex; align-items: center; padding: 0 16px; border-bottom: 1px solid #EBEBEB; background: #FAFAFA;")}><span className="mono" style={st("font-size: 12px; color: #111111;")}>Terminal</span></figcaption>
               <pre className="mono" style={st(PRE)}>

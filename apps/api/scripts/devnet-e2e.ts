@@ -13,7 +13,7 @@ import { x402Client, wrapFetchWithPayment, decodePaymentResponseHeader } from "@
 import { ExactSvmScheme as ExactSvmClient } from "@x402/svm/exact/client";
 import { createKeyPairSignerFromBytes } from "@solana/kit";
 import pg from "pg";
-import { BRAND, LocalKeySigner, OnchainCampaignReader, idl, signClaimRequest, salePda, claimFromWire, type ClaimWire } from "@noux/core";
+import { BRAND, configPda, LocalKeySigner, OnchainCampaignReader, idl, signClaimRequest, salePda, claimFromWire, type ClaimWire } from "@noux/core";
 import { AnchorChain, AnchorKeeperChain, Keeper, createNouxGateway, encodeClaimHeader, type GatewayEvent } from "@noux/gateway";
 import { createPool, migrate } from "../src/db";
 import { createApp } from "../src/app";
@@ -23,13 +23,18 @@ process.loadEnvFile(path.resolve(import.meta.dirname, "../../../.env"));
 const KEYS = path.resolve(import.meta.dirname, "../../../spike/keys");
 const key = (n: string) => Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(path.join(KEYS, `${n}.json`), "utf8"))));
 const buyer = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(path.join(os.homedir(), ".config/solana/id.json"), "utf8"))));
-const [merchant, distributor, feeOwner, attest, attacker] = ["merchant", "distributor", "fee", "attribution", "attacker"].map(key);
+const [merchant, distributor, attest, attacker] = ["merchant", "distributor", "attribution", "attacker"].map(key);
 
 const NET = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
 const USDC = new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
 const PROGRAM = new PublicKey((idl as any).address);
 const conn = new Connection(process.env.RPC_URL!, "confirmed");
-const PRICE = 100_000n, HOLD = 15, COMMISSION_BPS = 1500, FEE_BPS = 100;
+const PRICE = 100_000n, HOLD = 15, COMMISSION_BPS = 1500;
+// The protocol fee and fee wallet come from the on-chain config, never from the campaign creator.
+const protocolCfg = await (new anchor.Program(idl as anchor.Idl, new anchor.AnchorProvider(conn, new anchor.Wallet(Keypair.generate()), { commitment: "confirmed" })).account as any).config.fetch(configPda(PROGRAM));
+const feeOwner = { publicKey: protocolCfg.feeOwner as PublicKey };
+const FEE_BPS: number = protocolCfg.feeBps;
+
 const results: { name: string; ok: boolean }[] = [];
 const rec = (name: string, ok: boolean, detail = "") => { results.push({ name, ok }); console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  -> " + detail : ""}`); };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -49,8 +54,8 @@ if ((await bal(ata(attacker.publicKey))) < 200_000) await transfer(conn, buyer, 
 const program = new anchor.Program(idl as anchor.Idl, new anchor.AnchorProvider(conn, new anchor.Wallet(buyer), { commitment: "confirmed" }));
 const cid = new anchor.BN(crypto.randomBytes(6));
 const [campaign] = PublicKey.findProgramAddressSync([Buffer.from("campaign"), merchant.publicKey.toBuffer(), cid.toArrayLike(Buffer, "le", 8)], PROGRAM);
-await program.methods.createCampaign(cid, COMMISSION_BPS, FEE_BPS, new anchor.BN(1_000_000_000), attest.publicKey, [...Buffer.from("devnet\0\0")], HOLD)
-  .accounts({ merchant: merchant.publicKey, mint: USDC, feeOwner: feeOwner.publicKey, campaign, systemProgram: SystemProgram.programId }).signers([merchant]).rpc();
+await program.methods.createCampaign(cid, COMMISSION_BPS, new anchor.BN(1_000_000_000), attest.publicKey, [...Buffer.from("devnet\0\0")], HOLD)
+  .accounts({ merchant: merchant.publicKey, mint: USDC, config: configPda(PROGRAM), campaign, systemProgram: SystemProgram.programId }).signers([merchant]).rpc();
 console.log("campaign:", campaign.toBase58());
 
 // ---------- claim-issuance API (real Postgres, real chain reader) ----------

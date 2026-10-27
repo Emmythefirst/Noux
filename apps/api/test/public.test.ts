@@ -171,6 +171,35 @@ describe("public API: receipts", () => {
   });
 });
 
+describe("public API: protocol fee enforcement is reported from the on-chain config", () => {
+  const legacyFeeOwner = kp(), cfgAdmin = kp();
+  const withCfg: CampaignReader = { ...reader, config: async () => ({ admin: new PublicKey(cfgAdmin), feeOwner: new PublicKey(feeOwner), feeBps: 100 }) };
+  const appWith = (r: CampaignReader) => createApp(
+    { cfg: { CLUSTER: "devnet", PROGRAM_ID: kp(), CLAIM_TTL_SECS: 600, MAX_PRICE_BASE_UNITS: 1n, LIMIT_PER_DISTRIBUTOR_PER_MIN: 1, LIMIT_PER_BUYER_PER_MIN: 1, LIMIT_PER_CAMPAIGN_PER_MIN: 1, LIMIT_PER_IP_PER_MIN: 1 }, pool, signer, campaigns: r, now: () => NOW },
+    { trustProxy: false, clientIp: () => "9.9.9.9", public: { pool, campaigns: r, cluster: "devnet", programId: kp(), decimals: 6, now: () => NOW } });
+  beforeEach(async () => {
+    chain.snap = snapshot(); chain.snap.campaigns[1] = camp({ address: B, feeOwner: legacyFeeOwner, commissionBudget: "50000", commissionSpent: "50000" }); // B: created before enforcement, creator-chosen fee wallet
+    await syncOnce(pool, chain);
+  });
+  it("marks a campaign whose fee wallet is the protocol's as enforced, and a legacy one as not", async () => {
+    const app = appWith(withCfg);
+    expect((await get(app, `/v1/campaigns/${A}`)).body).toMatchObject({ feeEnforced: true, feeOwner });
+    expect((await get(app, `/v1/campaigns/${B}`)).body).toMatchObject({ feeEnforced: false, feeOwner: legacyFeeOwner });
+    const list = (await get(app, "/v1/campaigns?includeUnlisted=1")).body.items;
+    expect(list.find((x: any) => x.address === A).feeEnforced).toBe(true); expect(list.find((x: any) => x.address === B).feeEnforced).toBe(false);
+  });
+  it("never claims 'enforced' when the config can't be read", async () => {
+    expect((await get(appWith(reader), `/v1/campaigns/${A}`)).body.feeEnforced).toBeNull();
+    expect((await get(appWith({ ...reader, config: async () => { throw new Error("rpc down"); } }), `/v1/campaigns/${A}`)).body.feeEnforced).toBeNull();
+  });
+  it("stats expose the protocol config and the cap; receipts expose the fee wallet", async () => {
+    const app = appWith(withCfg);
+    expect((await get(app, "/v1/stats")).body.protocol).toEqual({ admin: cfgAdmin, feeOwner, feeBps: 100, maxFeeBps: 500 });
+    expect((await get(appWith(reader), "/v1/stats")).body.protocol).toBeNull();
+    expect((await get(app, `/v1/receipts/${S1}`)).body.parties.feeOwner).toBe(feeOwner);
+  });
+});
+
 describe("public API: distributors and stats", () => {
   beforeEach(async () => { await syncOnce(pool, chain); });
   it("distributor metrics are plain checkable numbers", async () => {

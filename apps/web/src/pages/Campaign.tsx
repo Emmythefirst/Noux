@@ -117,7 +117,7 @@ export default function CampaignPage() {
     { label: "Open", value: String(m.open), unit: "", note: "In the hold window or awaiting settlement" },
     { label: "Settled volume", value: fmtShort(m.volume), unit: " USDC", note: "Gross paid by buyers" },
     { label: "Commissions paid", value: fmtShort(m.commissionsPaid), unit: " USDC", note: `To ${m.distinctDistributors} distributor${m.distinctDistributors === 1 ? "" : "s"}` },
-    { label: "Protocol fees", value: fmtShort(m.protocolFees), unit: " USDC", note: `${bpsPct(c.feeBps, c.feeBps % 100 ? 2 : 0)} of volume (set by this campaign)` },
+    { label: "Protocol fees", value: fmtShort(m.protocolFees), unit: " USDC", note: `${bpsPct(c.feeBps, c.feeBps % 100 ? 2 : 0)} of volume` },
     { label: "Distinct buyers", value: String(m.distinctBuyers), unit: "", note: "Wallets that paid" },
     { label: "Distinct distributors", value: String(m.distinctDistributors), unit: "", note: "With a settled sale" },
     { label: "Top buyer share", value: m.settled ? String(Math.round(m.topBuyerShare * 100)) : "—", unit: m.settled ? "%" : "", note: m.settled ? `${topBuyerSales} of ${m.settled} sales, one wallet` : "No settled sales yet" },
@@ -156,13 +156,14 @@ export default function CampaignPage() {
           {[
             ["Price per call", <>{l?.displayPrice ?? "—"}</>, "#111111"],
             ["Commission", <>{bpsPct(c.commissionBps, c.commissionBps % 100 ? 2 : 0)}</>, "#0F766E"],
-            ["Protocol fee", <>{bpsPct(c.feeBps, c.feeBps % 100 ? 2 : 0)}</>, "#111111"],
+            ["Protocol fee", <>{bpsPct(c.feeBps, c.feeBps % 100 ? 2 : 0)}</>, "#111111", c.feeEnforced === true ? "Set by the program" : c.feeEnforced === false ? "Set by this campaign (legacy)" : ""],
             ["Refund hold", <>{c.holdSecs} <span style={st("font-size: 13px; color: #6B6B6B; font-weight: 400;")}>s</span></>, "#111111"],
             ["Claim lifetime", <>10 <span style={st("font-size: 13px; color: #6B6B6B; font-weight: 400;")}>min</span></>, "#111111"],
-          ].map(([k, v, color]) => (
+          ].map(([k, v, color, cap]) => (
             <div key={k as string} style={st("padding: 16px 20px; display: flex; flex-direction: column; gap: 4px; border-right: 1px solid #EBEBEB;")}>
               <span style={st("font-size: 12px; color: #6B6B6B;")}>{k}</span>
               <span className="tn" style={{ ...st("font-size: 20px; letter-spacing: -0.015em; font-weight: 500;"), color: color as string }}>{v}</span>
+              {cap ? <span style={st("font-size: 11px; color: #6B6B6B;")}>{cap as string}</span> : null}
             </div>
           ))}
           <div style={st("padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; grid-column: span 2; min-width: 0;")}>

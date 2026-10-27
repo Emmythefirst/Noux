@@ -7,7 +7,7 @@ import fs from "node:fs"; import os from "node:os"; import path from "node:path"
 import { Connection, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync, getOrCreateAssociatedTokenAccount, getAccount, transfer } from "@solana/spl-token";
 import * as anchor from "@anchor-lang/core";
-import { idl, claimFromWire, claimIsSelfConsistent, signClaimRequest, salePda, type ClaimWire } from "@noux/core";
+import { idl, configPda, claimFromWire, claimIsSelfConsistent, signClaimRequest, salePda, type ClaimWire } from "@noux/core";
 import { AnchorChain } from "@noux/gateway";
 
 process.loadEnvFile(path.resolve(import.meta.dirname, "../../../.env"));
@@ -15,12 +15,15 @@ const API = (process.env.API_URL ?? "https://noux-api.onrender.com").replace(/\/
 const ROOT = path.resolve(import.meta.dirname, "../../..");
 const load = (f: string) => Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(f, "utf8"))));
 const buyer = load(path.join(os.homedir(), ".config/solana/id.json"));
-const merchant = load(path.join(ROOT, "spike/keys/merchant.json")), distributor = load(path.join(ROOT, "spike/keys/distributor.json")), feeOwner = load(path.join(ROOT, "spike/keys/fee.json"));
+const merchant = load(path.join(ROOT, "spike/keys/merchant.json")), distributor = load(path.join(ROOT, "spike/keys/distributor.json"));
 const oldAttest = load(path.join(ROOT, "spike/keys/attribution.json"));
 const newAttestPub = new PublicKey(fs.readFileSync(path.join(ROOT, ".secrets/pubkeys.txt"), "utf8").split("\n")[0].trim());
 const USDC = new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
 const PROGRAM = new PublicKey((idl as any).address);
 const conn = new Connection(process.env.RPC_URL!, "confirmed");
+// The protocol fee and fee wallet come from the on-chain config, never from the campaign creator.
+const protocolCfg = await (new anchor.Program(idl as anchor.Idl, new anchor.AnchorProvider(conn, new anchor.Wallet(Keypair.generate()), { commitment: "confirmed" })).account as any).config.fetch(configPda(PROGRAM));
+const feeOwner = { publicKey: protocolCfg.feeOwner as PublicKey };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const results: boolean[] = [];
 const rec = (name: string, ok: boolean, detail = "") => { results.push(ok); console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  -> " + detail : ""}`); };
@@ -31,8 +34,8 @@ const program = new anchor.Program(idl as anchor.Idl, new anchor.AnchorProvider(
 async function newCampaign(attestKey: PublicKey, hold: number) {
   const id = new anchor.BN(crypto.randomBytes(6));
   const [campaign] = PublicKey.findProgramAddressSync([Buffer.from("campaign"), merchant.publicKey.toBuffer(), id.toArrayLike(Buffer, "le", 8)], PROGRAM);
-  await program.methods.createCampaign(id, 1500, 100, new anchor.BN(1_000_000_000), attestKey, [...Buffer.from("devnet\0\0")], hold)
-    .accounts({ merchant: merchant.publicKey, mint: USDC, feeOwner: feeOwner.publicKey, campaign, systemProgram: SystemProgram.programId }).signers([merchant]).rpc();
+  await program.methods.createCampaign(id, 1500, new anchor.BN(1_000_000_000), attestKey, [...Buffer.from("devnet\0\0")], hold)
+    .accounts({ merchant: merchant.publicKey, mint: USDC, config: configPda(PROGRAM), campaign, systemProgram: SystemProgram.programId }).signers([merchant]).rpc();
   return campaign;
 }
 type Req = { campaign: PublicKey; dist?: PublicKey; price?: bigint; ts?: number; signer?: Keypair; sigOver?: Partial<{ price: bigint }> };

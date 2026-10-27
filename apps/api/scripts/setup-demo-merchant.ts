@@ -9,7 +9,7 @@ import { Connection, Keypair, PublicKey, SystemProgram, Transaction, sendAndConf
 import { getOrCreateAssociatedTokenAccount } from "@solana/spl-token";
 import * as anchor from "@anchor-lang/core";
 import bs58 from "bs58";
-import { idl, signListing, type Listing } from "@noux/core";
+import { idl, configPda, signListing, type Listing } from "@noux/core";
 
 const ROOT = path.resolve(import.meta.dirname, "../../..");
 process.loadEnvFile(path.join(ROOT, ".env"));
@@ -19,6 +19,9 @@ const DEMO_URL = (process.env.DEMO_URL ?? "https://noux-demo-merchant.onrender.c
 const USDC = new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
 const PROGRAM = new PublicKey((idl as any).address);
 const conn = new Connection(process.env.RPC_URL!, "confirmed");
+// The protocol fee and fee wallet come from the on-chain config, never from the campaign creator.
+const protocolCfg = await (new anchor.Program(idl as anchor.Idl, new anchor.AnchorProvider(conn, new anchor.Wallet(Keypair.generate()), { commitment: "confirmed" })).account as any).config.fetch(configPda(PROGRAM));
+const feeOwner = { publicKey: protocolCfg.feeOwner as PublicKey };
 const funder = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(path.join(os.homedir(), ".config/solana/id.json"), "utf8"))));
 
 function key(name: string): Keypair {
@@ -26,7 +29,7 @@ function key(name: string): Keypair {
   if (fs.existsSync(f)) return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(f, "utf8"))));
   const k = Keypair.generate(); fs.writeFileSync(f, JSON.stringify([...k.secretKey]), { mode: 0o600 }); return k;
 }
-const merchant = key("demo-merchant"), payer = key("demo-gateway-payer"), feeOwner = key("demo-fee");
+const merchant = key("demo-merchant"), payer = key("demo-gateway-payer");
 async function topUp(to: PublicKey, minLamports: number, amount: number) {
   if ((await conn.getBalance(to)) >= minLamports) return;
   await sendAndConfirmTransaction(conn, new Transaction().add(SystemProgram.transfer({ fromPubkey: funder.publicKey, toPubkey: to, lamports: Math.round(amount * 1e9) })), [funder]);
@@ -43,8 +46,8 @@ else {
   const program = new anchor.Program(idl as anchor.Idl, new anchor.AnchorProvider(conn, new anchor.Wallet(funder), { commitment: "confirmed" }));
   const id = new anchor.BN(crypto.randomBytes(6));
   [campaign] = PublicKey.findProgramAddressSync([Buffer.from("campaign"), merchant.publicKey.toBuffer(), id.toArrayLike(Buffer, "le", 8)], PROGRAM);
-  await program.methods.createCampaign(id, 1500, 100, new anchor.BN(5_000_000), attestPub, [...Buffer.from("devnet\0\0")], 15)
-    .accounts({ merchant: merchant.publicKey, mint: USDC, feeOwner: feeOwner.publicKey, campaign, systemProgram: SystemProgram.programId }).signers([merchant]).rpc();
+  await program.methods.createCampaign(id, 1500, new anchor.BN(5_000_000), attestPub, [...Buffer.from("devnet\0\0")], 15)
+    .accounts({ merchant: merchant.publicKey, mint: USDC, config: configPda(PROGRAM), campaign, systemProgram: SystemProgram.programId }).signers([merchant]).rpc();
   fs.writeFileSync(campFile, campaign.toBase58() + "\n", { mode: 0o600 });
 }
 

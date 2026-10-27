@@ -319,7 +319,7 @@ export default function Landing() {
               <div style={st("display: flex; flex-direction: column; gap: 4px;")}>
                 <span style={st("font-size: 13px; font-weight: 500; color: #0E7A2F; display: flex; align-items: center; gap: 6px;")}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0E7A2F" strokeWidth="2" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Rejected on-chain or in the gateway</span>
                 <ul style={st("margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; font-size: 14px; color: #333333;")}>
-                  {["Forged or edited claims", "Replayed claims and double settlement", "Self-referral and expired claims", "Paying someone else’s claim", "Spending past the budget"].map((t, i, a) => (
+                  {["Forged or edited claims", "Replayed claims and double settlement", "Self-referral and expired claims", "Paying someone else’s claim", "Spending past the budget", "A merchant setting its own protocol fee or fee wallet"].map((t, i, a) => (
                     <li key={t} style={st("padding: 10px 0; " + (i < a.length - 1 ? "border-bottom: 1px solid #EBEBEB;" : ""))}>{t}</li>
                   ))}
                 </ul>
@@ -327,7 +327,7 @@ export default function Landing() {
               <div style={st("display: flex; flex-direction: column; gap: 4px;")}>
                 <span style={st("font-size: 13px; font-weight: 500; color: #8A4B00; display: flex; align-items: center; gap: 6px;")}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A4B00" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>Trust assumptions</span>
                 <ul style={st("margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; font-size: 14px; color: #333333;")}>
-                  {["Price and payer checks live in the merchant’s gateway", "A merchant can refund to skip a commission. Refund rates are public.", "The program upgrade key is one wallet today", "No independent audit yet"].map((t, i, a) => (
+                  {["Price and payer checks live in the merchant’s gateway", "A merchant can refund to skip a commission. Refund rates are public.", "The protocol fee (max 5%) and its wallet are set on-chain by one admin key", "The program upgrade key is one wallet today", "No independent audit yet"].map((t, i, a) => (
                     <li key={t} style={st("padding: 10px 0; " + (i < a.length - 1 ? "border-bottom: 1px solid #EBEBEB;" : ""))}>{t}</li>
                   ))}
                 </ul>

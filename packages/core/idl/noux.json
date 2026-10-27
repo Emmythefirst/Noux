@@ -160,6 +160,10 @@
     },
     {
       "name": "create_campaign",
+      "docs": [
+        "The protocol fee and fee wallet are NOT arguments: they are copied from the global config, so a merchant cannot",
+        "set them to zero or to their own wallet."
+      ],
       "discriminator": [
         111,
         131,
@@ -180,7 +184,25 @@
           "name": "mint"
         },
         {
-          "name": "fee_owner"
+          "name": "config",
+          "docs": [
+            "The only source of the protocol fee and fee wallet. PDA-checked, so a look-alike account is rejected."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "campaign",
@@ -226,10 +248,6 @@
           "type": "u16"
         },
         {
-          "name": "fee_bps",
-          "type": "u16"
-        },
-        {
           "name": "commission_budget",
           "type": "u64"
         },
@@ -249,6 +267,77 @@
         {
           "name": "hold_secs",
           "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "init_config",
+      "docs": [
+        "One-time, upgrade-authority only. Creates the global config that fixes the protocol fee and its recipient.",
+        "`admin` may be any key (keep it separate from the deploy wallet); it can later change the fee within MAX_FEE_BPS."
+      ],
+      "discriminator": [
+        23,
+        235,
+        115,
+        232,
+        168,
+        96,
+        1,
+        231
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Must be the program's upgrade authority: nobody else can create (or front-run) the config."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program_data",
+          "docs": [
+            "(deserialising `ProgramData` through Anchor adds ~87 KB to the program)."
+          ],
+          "address": "HyBMq93exm1iQcTbfmfYvzaDLCJ8tbegdu96WNnDDTdH"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "admin",
+          "type": "pubkey"
+        },
+        {
+          "name": "fee_owner",
+          "type": "pubkey"
+        },
+        {
+          "name": "fee_bps",
+          "type": "u16"
         }
       ]
     },
@@ -1112,6 +1201,61 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "update_config",
+      "docs": [
+        "Admin only. Affects campaigns created AFTERWARDS: each campaign copies the fee at creation and keeps it."
+      ],
+      "discriminator": [
+        29,
+        158,
+        252,
+        191,
+        10,
+        83,
+        219,
+        99
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "admin",
+          "type": "pubkey"
+        },
+        {
+          "name": "fee_owner",
+          "type": "pubkey"
+        },
+        {
+          "name": "fee_bps",
+          "type": "u16"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -1126,6 +1270,19 @@
         220,
         229,
         192
+      ]
+    },
+    {
+      "name": "Config",
+      "discriminator": [
+        155,
+        12,
+        170,
+        224,
+        30,
+        250,
+        204,
+        130
       ]
     },
     {
@@ -1245,6 +1402,16 @@
       "code": 6014,
       "name": "Math",
       "msg": "math overflow"
+    },
+    {
+      "code": 6015,
+      "name": "NotUpgradeAuthority",
+      "msg": "signer is not the program upgrade authority"
+    },
+    {
+      "code": 6016,
+      "name": "NotAdmin",
+      "msg": "signer is not the config admin"
     }
   ],
   "types": [
@@ -1311,6 +1478,33 @@
           {
             "name": "commission_bps",
             "type": "u16"
+          },
+          {
+            "name": "fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Config",
+      "docs": [
+        "Global, one per program. Fee % and fee wallet for NEW campaigns; capped at MAX_FEE_BPS."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_owner",
+            "type": "pubkey"
           },
           {
             "name": "fee_bps",

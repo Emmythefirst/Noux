@@ -11,7 +11,7 @@ snapshots the program's on-chain accounts about every 20 s; `GET /v1/index` repo
 | `GET /v1/campaigns/:address/sales` | Receipts of that campaign (`status` filter, paging). |
 | `GET /v1/receipts` / `GET /v1/receipts/:sale` | Public receipts: parties, price, exact split, policy applied (commission/fee bps, hold, **whether the budget cap reduced the commission**), refunded?, and explorer links for the open, x402 payment and settlement/refund transactions. |
 | `GET /v1/distributors/:pubkey` | A distributor's plain, checkable numbers: eligible purchases, total earned, referred volume, distinct buyers, top-buyer share, per-campaign breakdown, recent sales. No composite "trust score". |
-| `GET /v1/stats` | Platform totals. `volumeBySource` splits **sample** (Noux-built demo services) from **listed** and **unlisted** volume: demo volume is never presented as market demand. |
+| `GET /v1/stats` | Platform totals, and `protocol` (the on-chain fee config: admin, fee wallet, fee bps, 5% cap). `volumeBySource` splits **sample** (Noux-built demo services) from **listed** and **unlisted** volume: demo volume is never presented as market demand. |
 | `GET /v1/index` | Indexer freshness and last error. |
 | `PUT /v1/campaigns/:address/listing` | Create/update the directory listing. **Merchant-signed** (below). |
 | `POST /v1/claims` | Buyer-signed claim request (see `docs/security.md`). |
@@ -26,3 +26,8 @@ must be fresh (60 s). URLs must be `https` with no embedded credentials. Stored 
 ## Disclosure
 Every directory/detail/stats response carries a `disclosure` string: distributors earn commission on referred purchases, listings
 are not endorsements, and `sample` services are demonstrations whose volume is not real demand. UIs must display it.
+
+## Protocol fee
+The fee % and fee wallet are not chosen by merchants: `create_campaign` copies them from a global on-chain config (max 5%, changeable only by the config admin,
+and only for campaigns created afterwards). Campaign cards carry `feeOwner` and `feeEnforced` (`true`: the program's fee wallet; `false`: a legacy campaign created
+before enforcement; `null`: the config could not be read, so nothing is claimed). Receipts carry `parties.feeOwner`.

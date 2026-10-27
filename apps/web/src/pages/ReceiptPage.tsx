@@ -130,7 +130,7 @@ export default function ReceiptPage() {
   ] : [
     { name: "Merchant", pct: pct(r.split.merchant), addr: r.parties.merchant, amt: f(r.split.merchant), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #111111;", color: "#111111", anim: "l1" },
     { name: "Distributor", pct: pct(r.split.distributor), addr: r.parties.distributor, amt: f(r.split.distributor), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #0F766E;", color: "#0F766E", anim: "l2" },
-    { name: "Protocol fee", pct: pct(r.split.protocolFee), addr: null, amt: f(r.split.protocolFee), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #D4D4D8;", color: "#111111", anim: "l3" },
+    { name: "Protocol fee", pct: pct(r.split.protocolFee), addr: r.parties.feeOwner ?? null, amt: f(r.split.protocolFee), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #D4D4D8;", color: "#111111", anim: "l3" },
   ];
 
   const unpaid = held && BigInt(g) === 0n;

@@ -40,12 +40,16 @@ export function publicRoutes(d: PublicDeps) {
   });
   const LJ = `l.name l_name, l.description l_description, l.category l_category, l.endpoint_url l_endpoint_url, l.route l_route, l.display_price l_display_price, l.website l_website, l.is_sample l_is_sample, l.updated_at l_updated_at`;
 
-  const card = (r: any) => {
+  // protocol fee config, read from the chain (cached 30 s); null when it can't be read (then nothing claims "enforced")
+  const protocol = async () => { try { return (await d.campaigns.config?.()) ?? null; } catch { return null; } };
+  const card = (r: any, cfg: { feeOwner: PublicKey } | null = null) => {
     const total = BigInt(r.commission_budget), spent = BigInt(r.commission_spent), remaining = total > spent ? total - spent : 0n;
     const settled = Number(r.settled_count), refunded = Number(r.refunded_count);
     return {
       address: r.address, merchant: r.merchant, mint: r.mint, decimals: d.decimals, cluster: r.cluster,
       commissionBps: r.commission_bps, feeBps: r.fee_bps, holdSecs: r.hold_secs,
+      // true: the fee wallet is the protocol's (set by the program's config). false: a legacy campaign created before enforcement. null: unknown.
+      feeOwner: r.fee_owner, feeEnforced: cfg ? r.fee_owner === cfg.feeOwner.toBase58() : null,
       budget: { total: total.toString(), spent: spent.toString(), remaining: remaining.toString() },
       status: remaining > 0n ? "active" : "budget_exhausted",
       sales: { settled, refunded, open: Number(r.open_n ?? 0), refundRate: settled + refunded > 0 ? refunded / (settled + refunded) : null },
@@ -59,7 +63,7 @@ export function publicRoutes(d: PublicDeps) {
     const wanted = (gross * BigInt(r.commission_bps)) / 10000n;
     return {
       sale: r.address, campaign: r.campaign, status: r.status, cluster: d.cluster, decimals: d.decimals,
-      parties: { merchant: r.merchant, distributor: r.distributor, buyer: r.buyer },
+      parties: { merchant: r.merchant, distributor: r.distributor, buyer: r.buyer, feeOwner: r.fee_owner },
       price: String(r.price), gross: String(r.gross),
       split: { merchant: String(r.merchant_amount), distributor: String(r.commission_amount), protocolFee: String(r.fee_amount) },
       policy: {
@@ -72,7 +76,7 @@ export function publicRoutes(d: PublicDeps) {
       listing: listingOf(r),
     };
   };
-  const RJ = `s.*, c.merchant, c.hold_secs, ${LJ}`;
+  const RJ = `s.*, c.merchant, c.hold_secs, c.fee_owner, ${LJ}`;
   const RFROM = `FROM idx_sales s JOIN idx_campaigns c ON c.address = s.campaign LEFT JOIN listings l ON l.campaign = s.campaign`;
 
   /* ---------- directory ---------- */
@@ -95,7 +99,8 @@ export function publicRoutes(d: PublicDeps) {
          (SELECT count(*) FROM idx_sales s WHERE s.campaign = c.address AND s.status = 'open') open_n,
          (SELECT coalesce(sum(gross), 0) FROM idx_sales s WHERE s.campaign = c.address AND s.status = 'settled') volume
        FROM idx_campaigns c LEFT JOIN listings l ON l.campaign = c.address ${where} ORDER BY ${order} LIMIT $${p.length - 1} OFFSET $${p.length}`, p);
-    cache(c); return c.json({ items: rows.map(card), total, limit: q.data.limit, offset: q.data.offset, disclosure: DISCLOSURE });
+    const cfg = await protocol();
+    cache(c); return c.json({ items: rows.map((r) => card(r, cfg)), total, limit: q.data.limit, offset: q.data.offset, disclosure: DISCLOSURE });
   });
 
   app.get("/campaigns/:address", async (c) => {
@@ -113,7 +118,7 @@ export function publicRoutes(d: PublicDeps) {
     const top = (await d.pool.query(`SELECT distributor, count(*)::int purchases, sum(commission_amount) earned FROM idx_sales WHERE campaign = $1 AND status = 'settled' GROUP BY distributor ORDER BY sum(commission_amount) DESC, count(*) DESC LIMIT 10`, [a])).rows;
     cache(c);
     return c.json({
-      ...card(rows[0]), disclosure: DISCLOSURE,
+      ...card(rows[0], await protocol()), disclosure: DISCLOSURE,
       metrics: {
         settled: st.settled, refunded: st.refunded, open: st.open, volume: String(st.volume), commissionsPaid: String(st.commissions), protocolFees: String(st.fees),
         merchantRevenue: String(st.merchant_revenue), refundedAmount: String(st.refunded_amount), distinctBuyers: st.distinct_buyers, distinctDistributors: st.distinct_distributors,
@@ -195,6 +200,7 @@ export function publicRoutes(d: PublicDeps) {
     cache(c);
     return c.json({
       cluster: d.cluster, programId: d.programId, decimals: d.decimals, disclosure: DISCLOSURE,
+      protocol: await protocol().then((c) => (c ? { admin: c.admin.toBase58(), feeOwner: c.feeOwner.toBase58(), feeBps: c.feeBps, maxFeeBps: 500 } : null)),
       totals: { campaigns: t.campaigns, listedCampaigns: t.listed, merchants, settled: t.settled, refunded: t.refunded, open: t.open, volume: String(t.volume), commissionsPaid: String(t.commissions), protocolFees: String(t.fees), refundedAmount: String(t.refunded_amount), distinctBuyers: t.distinct_buyers, distinctDistributors: t.distinct_distributors },
       // honesty: demo volume is reported separately and never counted as market demand
       volumeBySource: { sample: by.sample ?? { settled: 0, volume: "0" }, listed: by.listed ?? { settled: 0, volume: "0" }, unlisted: by.unlisted ?? { settled: 0, volume: "0" } },

@@ -21,18 +21,45 @@ pub const MAX_HOLD_SECS: u32 = 600;
 pub mod noux {
     use super::*;
 
+    /// One-time, upgrade-authority only. Creates the global config that fixes the protocol fee and its recipient.
+    /// `admin` may be any key (keep it separate from the deploy wallet); it can later change the fee within MAX_FEE_BPS.
+    pub fn init_config(ctx: Context<InitConfig>, admin: Pubkey, fee_owner: Pubkey, fee_bps: u16) -> Result<()> {
+        require!(fee_bps <= MAX_FEE_BPS, NouxError::BpsTooHigh);
+        require!(
+            upgrade_authority(&ctx.accounts.program_data.try_borrow_data()?) == Some(ctx.accounts.authority.key()),
+            NouxError::NotUpgradeAuthority
+        );
+        let c = &mut ctx.accounts.config;
+        c.admin = admin;
+        c.fee_owner = fee_owner;
+        c.fee_bps = fee_bps;
+        c.bump = ctx.bumps.config;
+        Ok(())
+    }
+
+    /// Admin only. Affects campaigns created AFTERWARDS: each campaign copies the fee at creation and keeps it.
+    pub fn update_config(ctx: Context<UpdateConfig>, admin: Pubkey, fee_owner: Pubkey, fee_bps: u16) -> Result<()> {
+        require!(fee_bps <= MAX_FEE_BPS, NouxError::BpsTooHigh);
+        let c = &mut ctx.accounts.config;
+        c.admin = admin;
+        c.fee_owner = fee_owner;
+        c.fee_bps = fee_bps;
+        Ok(())
+    }
+
+    /// The protocol fee and fee wallet are NOT arguments: they are copied from the global config, so a merchant cannot
+    /// set them to zero or to their own wallet.
     pub fn create_campaign(
         ctx: Context<CreateCampaign>,
         campaign_id: u64,
         commission_bps: u16,
-        fee_bps: u16,
         commission_budget: u64,
         attribution_key: Pubkey,
         cluster: [u8; 8],
         hold_secs: u32,
     ) -> Result<()> {
+        let fee_bps = ctx.accounts.config.fee_bps;
         require!(commission_bps <= MAX_COMMISSION_BPS, NouxError::BpsTooHigh);
-        require!(fee_bps <= MAX_FEE_BPS, NouxError::BpsTooHigh);
         require!(hold_secs <= MAX_HOLD_SECS, NouxError::HoldTooLong);
         require!(commission_bps as u64 + fee_bps as u64 <= BPS, NouxError::BpsTooHigh);
         let c = &mut ctx.accounts.campaign;
@@ -48,7 +75,7 @@ pub mod noux {
         c.hold_secs = hold_secs;
         c.settled_count = 0;
         c.refunded_count = 0;
-        c.fee_owner = ctx.accounts.fee_owner.key();
+        c.fee_owner = ctx.accounts.config.fee_owner;
         c.bump = ctx.bumps.campaign;
         Ok(())
     }
@@ -241,6 +268,19 @@ pub mod noux {
     }
 }
 
+/// ProgramData PDA of this program under the upgradeable loader.
+pub fn programdata_address() -> Pubkey {
+    Pubkey::find_program_address(&[crate::ID.as_ref()], &solana_sdk_ids::bpf_loader_upgradeable::ID).0
+}
+
+/// Upgrade authority from raw ProgramData bytes: u32 variant (3) | u64 slot | Option<Pubkey> (1 tag byte + 32).
+pub fn upgrade_authority(d: &[u8]) -> Option<Pubkey> {
+    if d.len() < 45 || u32::from_le_bytes(d[0..4].try_into().ok()?) != 3 || d[12] != 1 {
+        return None;
+    }
+    Some(Pubkey::new_from_array(d[13..45].try_into().ok()?))
+}
+
 fn mul_bps(amount: u64, bps: u16) -> Result<u64> {
     Ok((amount as u128 * bps as u128 / BPS as u128) as u64)
 }
@@ -293,13 +333,39 @@ fn verify_ed25519_prev(ix_sysvar: &AccountInfo, signer: &Pubkey, msg: &[u8]) -> 
 }
 
 #[derive(Accounts)]
+pub struct InitConfig<'info> {
+    /// Must be the program's upgrade authority: nobody else can create (or front-run) the config.
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    #[account(
+        init, payer = authority, space = 8 + Config::INIT_SPACE,
+        seeds = [b"config"], bump
+    )]
+    pub config: Account<'info, Config>,
+    /// CHECK: the program's ProgramData account. Address is derived below and the upgrade authority is read by hand
+    /// (deserialising `ProgramData` through Anchor adds ~87 KB to the program).
+    #[account(address = programdata_address() @ NouxError::NotUpgradeAuthority)]
+    pub program_data: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateConfig<'info> {
+    #[account(address = config.admin @ NouxError::NotAdmin)]
+    pub admin: Signer<'info>,
+    #[account(mut, seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
+}
+
+#[derive(Accounts)]
 #[instruction(campaign_id: u64)]
 pub struct CreateCampaign<'info> {
     #[account(mut)]
     pub merchant: Signer<'info>,
     pub mint: Account<'info, Mint>,
-    /// CHECK: owner of the protocol-fee token account; only stored.
-    pub fee_owner: UncheckedAccount<'info>,
+    /// The only source of the protocol fee and fee wallet. PDA-checked, so a look-alike account is rejected.
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
     #[account(
         init, payer = merchant, space = 8 + Campaign::INIT_SPACE,
         seeds = [b"campaign", merchant.key().as_ref(), &campaign_id.to_le_bytes()], bump
@@ -395,6 +461,16 @@ pub struct CloseExpiredSale<'info> {
     #[account(mut, address = sale.rent_payer)]
     pub rent_payer: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token>,
+}
+
+/// Global, one per program. Fee % and fee wallet for NEW campaigns; capped at MAX_FEE_BPS.
+#[account]
+#[derive(InitSpace)]
+pub struct Config {
+    pub admin: Pubkey,
+    pub fee_owner: Pubkey,
+    pub fee_bps: u16,
+    pub bump: u8,
 }
 
 #[account]
@@ -501,4 +577,8 @@ pub enum NouxError {
     NothingToRefund,
     #[msg("math overflow")]
     Math,
+    #[msg("signer is not the program upgrade authority")]
+    NotUpgradeAuthority,
+    #[msg("signer is not the config admin")]
+    NotAdmin,
 }

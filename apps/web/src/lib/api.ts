@@ -11,6 +11,7 @@ export interface Listing {
 export interface Campaign {
   address: string; merchant: string; mint: string; decimals: number; cluster: string;
   commissionBps: number; feeBps: number; holdSecs: number;
+  feeOwner: string; feeEnforced: boolean | null;
   budget: { total: string; spent: string; remaining: string };
   status: "active" | "budget_exhausted";
   sales: { settled: number; refunded: number; open: number; refundRate: number | null };
@@ -26,7 +27,7 @@ export interface CampaignDetail extends Campaign {
 }
 export interface Receipt {
   sale: string; campaign: string; status: "open" | "settled" | "refunded"; cluster: string; decimals: number;
-  parties: { merchant: string; distributor: string; buyer: string };
+  parties: { merchant: string; distributor: string; buyer: string; feeOwner?: string };
   price: string; gross: string;
   split: { merchant: string; distributor: string; protocolFee: string };
   policy: { commissionBps: number; feeBps: number; holdSecs: number; rounding: string; budgetCapApplied: boolean };
@@ -37,6 +38,7 @@ export interface Receipt {
 export interface Page<T> { items: T[]; total: number; limit: number; offset: number; disclosure?: string }
 export interface Stats {
   cluster: string; programId: string; decimals: number; disclosure: string;
+  protocol: { admin: string; feeOwner: string; feeBps: number; maxFeeBps: number } | null;
   totals: { campaigns: number; listedCampaigns: number; merchants: number; settled: number; refunded: number; open: number; volume: string; commissionsPaid: string; protocolFees: string; refundedAmount: string; distinctBuyers: number; distinctDistributors: number };
   volumeBySource: { sample: { settled: number; volume: string }; listed: { settled: number; volume: string }; unlisted: { settled: number; volume: string } };
   index: { lastSyncedAt: string | null; ageSeconds: number | null; lastSlot: number | null; lastError: string | null };
