@@ -118,3 +118,37 @@ describe("paid endpoints", () => {
     const ok = await payFor(h.url, "/sample/brief", hdr); expect(ok.status).toBe(200); expect((await ok.json()).sample).toBe(true); expect(h.settled).toHaveLength(1);
   });
 });
+
+import { scrub } from "../src/app";
+describe("operator diagnostics and failure mapping", () => {
+  it("scrub removes api keys, bearer tokens and known secrets, and truncates", () => {
+    const s = scrub("GET https://rpc.example/?api-key=ABC123SECRET&x=1 failed Bearer eyJhbGciOi.payload.sig; secret=SUPERSECRETVALUE tail", ["SUPERSECRETVALUE"]);
+    expect(s).not.toContain("ABC123SECRET"); expect(s).not.toContain("eyJhbGciOi"); expect(s).not.toContain("SUPERSECRETVALUE"); expect(s).toContain("REDACTED");
+    expect(scrub("x".repeat(500)).length).toBeLessThanOrEqual(160);
+  });
+  it("/v1/status serves sanitised diagnostics (cached) when configured, 404 otherwise", async () => {
+    let calls = 0;
+    const mk = (diagnose?: () => Promise<Record<string, unknown>>) => createDemoApp({
+      cluster: "devnet", network: NET, claimsApiUrl: "https://api.example", campaign, mint, merchantPayTo: merchantPay, diagnose,
+      gateway: { programId, cluster: "devnet", campaign, mint, network: NET, merchantPayTo: merchantPay, connection: {} as any, campaigns: { get: async () => info() }, opener: { ensureOpen: async () => Keypair.generate().publicKey },
+        facilitator: { getSupported: async () => ({ kinds: [{ x402Version: 2, scheme: "exact", network: NET, extra: { feePayer: Keypair.generate().publicKey.toBase58() } }], extensions: [], signers: {} }), verify: async () => ({ isValid: true }), settle: async () => ({ success: true, transaction: "t", network: NET, payer: "p" }) } as any },
+    }).app;
+    const a = mk(async () => { calls++; return { rpc: { ok: true } }; });
+    server = await new Promise<Server>((res) => { const s = a.listen(0, () => res(s)); }); const u = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    expect(await (await fetch(u + "/v1/status")).json()).toEqual({ rpc: { ok: true } }); await fetch(u + "/v1/status"); expect(calls).toBe(1); // cached
+    expect((await fetch(u + "/v1/status")).headers.get("cache-control")).toBe("no-store");
+    await new Promise((r) => server!.close(() => r(null)));
+    server = await new Promise<Server>((res) => { const s = mk().listen(0, () => res(s)); }); expect((await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/v1/status`)).status).toBe(404);
+  });
+  it("an unreachable facilitator yields 503 + Retry-After on paid routes, while free routes still work", async () => {
+    const { app } = createDemoApp({
+      cluster: "devnet", network: NET, claimsApiUrl: "https://api.example", campaign, mint, merchantPayTo: merchantPay,
+      gateway: { programId, cluster: "devnet", campaign, mint, network: NET, merchantPayTo: merchantPay, connection: {} as any, campaigns: { get: async () => info() }, opener: { ensureOpen: async () => Keypair.generate().publicKey },
+        facilitator: { getSupported: async () => { throw new TypeError("fetch failed"); }, verify: async () => { throw new TypeError("fetch failed"); }, settle: async () => { throw new TypeError("fetch failed"); } } as any,
+        resilient: { sleep: async () => {}, backoffMs: () => 0, maxAttempts: 2 } },
+    });
+    server = await new Promise<Server>((res) => { const s = app.listen(0, () => res(s)); }); const u = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const r = await fetch(u + "/sample/brief"); expect(r.status).toBe(503); expect(r.headers.get("retry-after")).toBe("10"); expect((await r.json()).error.code).toBe("facilitator_unavailable");
+    expect((await fetch(u + "/healthz")).status).toBe(200);
+  });
+});

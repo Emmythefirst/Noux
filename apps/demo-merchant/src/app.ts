@@ -14,10 +14,19 @@ export const ROUTES: Record<string, RouteSpec & { display: string }> = {
 // deterministic pseudo-data so repeated calls on the same day agree; clearly NOT real
 const seeded = (s: string) => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0) / 2 ** 32; };
 
+/** Remove anything secret-looking from a message before it leaves the process. */
+export function scrub(msg: string, secrets: string[] = []): string {
+  let m = String(msg).replace(/api-key=[^&\s"']+/gi, "api-key=REDACTED").replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/g, "Bearer REDACTED");
+  for (const s of secrets) if (s && s.length >= 8) m = m.split(s).join("REDACTED");
+  return m.replace(/\s+/g, " ").slice(0, 160);
+}
+
 export interface DemoAppConfig {
   gateway: Omit<NouxGatewayConfig, "routes">;
   claimsApiUrl: string; publicUrl?: string; cluster: string; campaign: PublicKey; mint: PublicKey; merchantPayTo: PublicKey; network: string;
   now?: () => Date;
+  /** Operator diagnostics for GET /v1/status. Must return only sanitised facts (no secrets). Cached 20 s. */
+  diagnose?: () => Promise<Record<string, unknown>>;
 }
 
 export function createDemoApp(cfg: DemoAppConfig) {
@@ -39,12 +48,32 @@ export function createDemoApp(cfg: DemoAppConfig) {
       directory: `${cfg.claimsApiUrl}/v1/campaigns`, receipts: `${cfg.claimsApiUrl}/v1/receipts`,
     });
   });
+  let diagCache: { at: number; body: unknown } | undefined;
+  app.get("/v1/status", async (_q, r) => {
+    if (!cfg.diagnose) { r.status(404).json({ error: { code: "not_available" } }); return; }
+    if (!diagCache || Date.now() - diagCache.at > 20_000) {
+      try { diagCache = { at: Date.now(), body: await cfg.diagnose() }; } catch (e) { diagCache = { at: Date.now(), body: { error: scrub((e as Error).message) } }; }
+    }
+    r.set("cache-control", "no-store").json(diagCache.body);
+  });
   app.get("/", (req, r) => {
     if (req.accepts(["html", "json"]) === "json") { r.redirect("/v1/info"); return; }
     r.type("html").send(`<!doctype html><meta charset="utf-8"><title>Noux sample merchant</title><body style="font:16px system-ui;max-width:42rem;margin:3rem auto;padding:0 1rem">
 <h1>Noux sample merchant</h1><p><strong>SAMPLE SERVICE.</strong> Built by the Noux team to demonstrate paid x402 calls with referral commissions. The data it returns is generated, not real.</p>
 <ul><li><code>GET /sample/brief</code> &mdash; $0.10</li><li><code>GET /sample/quote</code> &mdash; $0.03</li></ul>
 <p>Machine-readable description: <a href="/v1/info">/v1/info</a>. Request a claim from <code>${cfg.claimsApiUrl}/v1/claims</code>, pay through x402, then see the public receipt at <code>${cfg.claimsApiUrl}/v1/receipts</code>.</p></body>`);
+  });
+
+  // The x402 middleware swallows facilitator-init failures and answers a bare 500 itself, so check first (cached) and say 503.
+  let fac: { at: number; ok: boolean } | undefined;
+  const isPaid = (req: express.Request) => req.method === "GET" && `GET ${req.path}` in ROUTES;
+  app.use(async (req, res, next) => {
+    if (!isPaid(req)) { next(); return; }
+    if (!fac || Date.now() - fac.at > (fac.ok ? 300_000 : 5_000)) {
+      try { await gw.facilitator.getSupported(); fac = { at: Date.now(), ok: true }; } catch { fac = { at: Date.now(), ok: false }; }
+    }
+    if (fac.ok) { next(); return; }
+    res.status(503).set("retry-after", "10").json({ error: { code: "facilitator_unavailable", message: "payment facilitator is unreachable; retry shortly" } });
   });
 
   // ---- paid endpoints (the gateway middleware answers 402 / verifies / settles; handlers only run once payment verified)
@@ -57,6 +86,15 @@ export function createDemoApp(cfg: DemoAppConfig) {
     const sym = String(req.query.symbol ?? "SOL").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10) || "SOL";
     const day = now().toISOString().slice(0, 10);
     r.json({ sample: true, notice: SAMPLE_NOTICE, symbol: sym, date: day, price: Number((20 + seeded(sym + day) * 180).toFixed(2)), currency: "USD" });
+  });
+  // A facilitator outage must read as 503 (retry later), not a bare 500.
+  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    const m = String(err?.message ?? err);
+    if (/facilitator|Failed to initialize|fetch failed|EAI_AGAIN|ETIMEDOUT|ECONNRESET/i.test(m)) {
+      res.status(503).set("retry-after", "10").json({ error: { code: "facilitator_unavailable", message: "payment facilitator is unreachable; retry shortly" } }); return;
+    }
+    console.error(JSON.stringify({ t: new Date().toISOString(), type: "unhandled_error", message: scrub(m) }));
+    res.status(500).json({ error: { code: "internal", message: "internal error" } });
   });
   return { app, gateway: gw };
 }

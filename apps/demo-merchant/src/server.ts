@@ -5,7 +5,7 @@ import { createFacilitatorConfig } from "@coinbase/x402";
 import { OnchainCampaignReader } from "@noux/core";
 import { AnchorChain } from "@noux/gateway";
 import { loadConfig } from "./config";
-import { createDemoApp } from "./app";
+import { createDemoApp, scrub } from "./app";
 
 const cfg = loadConfig();
 const conn = new Connection(cfg.RPC_URL, "confirmed");
@@ -15,7 +15,25 @@ const merchant = cfg.MERCHANT_SIGNER_B58 ? Keypair.fromSecretKey(bs58.decode(cfg
 const facilitator = new HTTPFacilitatorClient(cfg.FACILITATOR === "cdp" ? createFacilitatorConfig(cfg.CDP_API_KEY_ID, cfg.CDP_API_KEY_SECRET) : { url: "https://x402.org/facilitator" });
 const chain = new AnchorChain({ connection: conn, programId, mint, gatewayPayer: payer, merchant });
 
+const secrets = [cfg.CDP_API_KEY_SECRET, cfg.CDP_API_KEY_ID, cfg.GATEWAY_PAYER_B58, cfg.MERCHANT_SIGNER_B58, new URL(cfg.RPC_URL).searchParams.get("api-key")].filter(Boolean) as string[];
+const step = async (f: () => Promise<Record<string, unknown>>) => { try { return { ok: true, ...(await f()) }; } catch (e) { return { ok: false, error: scrub((e as Error).message, secrets) }; } };
+const campaignKey = new PublicKey(cfg.CAMPAIGN), reader = new OnchainCampaignReader(conn, programId, 0, 0);
+async function diagnose() {
+  const sec = cfg.CDP_API_KEY_SECRET ?? "", kid = cfg.CDP_API_KEY_ID ?? "";
+  const rpcUrl = new URL(cfg.RPC_URL);
+  return {
+    cluster: cfg.CLUSTER, facilitatorMode: cfg.FACILITATOR, settleAfterDelivery: !!merchant,
+    // shapes only, never values: lets an operator spot a mangled credential (wrong length, lost trailing '=') without logs
+    credentialShape: { rpcHost: rpcUrl.host, rpcHasApiKeyParam: rpcUrl.searchParams.has("api-key"), cdpIdLength: kid.length, cdpSecretLength: sec.length, cdpSecretTrailingEquals: sec.length - sec.replace(/=+$/, "").length, payerKeyLength: cfg.GATEWAY_PAYER_B58.length },
+    rpc: await step(async () => ({ slot: await conn.getSlot("confirmed") })),
+    payer: await step(async () => { const l = await conn.getBalance(payer.publicKey); return { address: payer.publicKey.toBase58(), sol: l / 1e9, low: l < 20_000_000 }; }),
+    campaign: await step(async () => { const c = await reader.get(campaignKey); if (!c) throw new Error("campaign account not found / not owned by the program"); return { found: true, cluster: c.cluster, merchantMatchesPayTo: c.merchant.toBase58() === cfg.MERCHANT_PAYTO, merchantSignerMatches: merchant ? merchant.publicKey.equals(c.merchant) : null, holdSecs: c.holdSecs }; }),
+    facilitator: await step(async () => { const s = await facilitator.getSupported(); const k = s.kinds.filter((x: any) => x.network === cfg.NETWORK && x.scheme === "exact"); return { supportsNetwork: k.length > 0, kinds: s.kinds.length }; }),
+  };
+}
+
 const { app } = createDemoApp({
+  diagnose,
   cluster: cfg.CLUSTER, network: cfg.NETWORK, claimsApiUrl: cfg.CLAIMS_API_URL, publicUrl: cfg.PUBLIC_URL,
   campaign: new PublicKey(cfg.CAMPAIGN), mint, merchantPayTo: new PublicKey(cfg.MERCHANT_PAYTO),
   gateway: {
