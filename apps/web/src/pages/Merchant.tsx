@@ -526,7 +526,7 @@ export default function Merchant() {
                     <li style={st("display: flex; justify-content: space-between; gap: 8px; padding: 8px 0;")}><span style={st("display: flex; align-items: center; gap: 8px; color: #333333;")}><Dot color={l0 ? "#15B042" : "#8A8A8A"} />Listing</span><span style={st("color: #6B6B6B;")}>{l0 ? "Signed · in directory" : "Not listed"}</span></li>
                   </ul>
                   <pre className="mono" style={st("margin: 0; padding: 12px; background: #FAFAFA; border: 1px solid #EBEBEB; border-radius: 8px; font-size: 11px; line-height: 17px; color: #333333; overflow-x: auto;")}>{`app.use("/v1/brief", nouxGateway({\n  campaign: "${short(shown[0]?.address ?? "campaign")}",\n  price: "0.10",\n}));`}</pre>
-                  <Link to="/docs/quickstart" style={st("font-size: 13px; font-weight: 500;")}>Gateway docs →</Link>
+                  <Link to="/docs/gateway" style={st("font-size: 13px; font-weight: 500;")}>Gateway docs →</Link>
                 </section>
                 <section aria-labelledby="td-h" style={st("border: 1px solid #EBEBEB; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px;")}>
                   <h2 id="td-h" style={st(H2)}>Top distributors</h2>

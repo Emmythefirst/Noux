@@ -313,7 +313,7 @@ export default function Landing() {
             <div style={st("display: flex; flex-direction: column; gap: 16px;")}>
               <h2 style={st(H2)}>What we protect. <span style={st("color: #6B6B6B;")}>And what we don’t, yet.</span></h2>
               <p style={st("font-size: 16px; line-height: 24px; color: #333333; max-width: 460px;")}>We would rather you trust the numbers than the marketing. Here is the model in plain words.</p>
-              <Link to="/docs/quickstart" style={st("font-size: 14px; font-weight: 500;")}>Read the security notes →</Link>
+              <Link to="/docs/security-model" style={st("font-size: 14px; font-weight: 500;")}>Read the security notes →</Link>
             </div>
             <div style={st("display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 32px;")}>
               <div style={st("display: flex; flex-direction: column; gap: 4px;")}>

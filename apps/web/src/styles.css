@@ -95,3 +95,25 @@ h2[id],h3[id],section[id]{scroll-margin-top:84px}
 
 /* dark mode: the fixed black merchant segment would vanish on a near-black page, so give it a hairline (colours themselves never change) */
 :root[data-theme="dark"] [style*="--c-111112"]{box-shadow:0 0 0 1px rgba(255,255,255,.38)}
+
+/* documentation pages (markdown rendered by docs/render.ts) */
+.doc{display:flex;flex-direction:column;gap:16px;font-size:16px;line-height:26px;color:#333333}
+.doc>p:first-child{font-size:18px;line-height:28px;text-wrap:pretty}
+.doc h2{font-size:24px;line-height:30px;letter-spacing:-0.02em;font-weight:500;color:#111111;margin:16px 0 0}
+.doc h3{font-size:16px;line-height:20px;letter-spacing:-0.01em;font-weight:500;color:#111111;margin:8px 0 0}
+.doc p,.doc ul,.doc ol{margin:0}
+.doc ul,.doc ol{padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.doc li{padding-left:2px}
+.doc hr{border:0;border-top:1px solid #EBEBEB;margin:8px 0}
+.doc strong{color:#111111;font-weight:600}
+.doc a{font-weight:500}
+.doc .doc-table{border:1px solid #EBEBEB;border-radius:12px;overflow-x:auto}
+.doc table{width:100%;min-width:480px;border-collapse:collapse;font-size:14px;line-height:20px}
+.doc th{text-align:left;padding:0 16px;height:40px;font-size:12px;font-weight:500;color:#6B6B6B;border-bottom:1px solid #EBEBEB;white-space:nowrap}
+.doc td{padding:12px 16px;border-bottom:1px solid #EBEBEB;vertical-align:top;color:#333333}
+.doc tr:last-child td{border-bottom:0}
+.doc .doc-code{margin:0;border:1px solid #EBEBEB;border-radius:12px;overflow:hidden}
+.doc .doc-code pre{margin:0;padding:16px 20px;font-family:"Geist Mono",ui-monospace,Menlo,monospace;font-size:13px;line-height:22px;color:#111111;overflow-x:auto;background:#FAFAFA}
+.doc .callout{display:block;padding:14px 16px;border-radius:12px;font-size:14px;line-height:22px;color:#333333;border:1px solid #B3D4FF;background:rgba(0,88,176,0.05)}
+.doc .callout p{margin:0}
+.doc .callout-warn{border-color:#F5D9A8;background:rgba(138,75,0,0.05)}

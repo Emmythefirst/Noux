@@ -55,7 +55,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/receipts" element={<LatestReceipt />} />
           <Route path="/r/:sale" element={<ReceiptPage />} />
           <Route path="/docs" element={<Docs />} />
-          <Route path="/docs/quickstart" element={<Docs />} />
+          <Route path="/docs/:slug" element={<Docs />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/app/merchant/*" element={<Suspense fallback={null}><Merchant /></Suspense>} />
           <Route path="/app/earnings" element={<Distributor />} />

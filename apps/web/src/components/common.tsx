@@ -104,7 +104,7 @@ export function TopNav({ variant = "app", surface = "#FFFFFF", cta = false }: { 
         <div className="hide-sm" style={st("display: flex; gap: 24px; font-size: 14px;")}>
           <NavLink className="nl" to="/campaigns" style={link}>Campaigns</NavLink>
           <NavLink className="nl" to="/receipts" style={link}>Receipts</NavLink>
-          <NavLink className="nl" to="/docs/quickstart" style={link}>Docs</NavLink>
+          <NavLink className="nl" to="/docs/overview" style={link}>Docs</NavLink>
           {variant === "landing" && <a className="nl" href="/#security" style={st("color: #6B6B6B;")}>Security</a>}
         </div>
         <div style={{ flex: 1 }} />
@@ -133,8 +133,8 @@ export function SiteFooter({ disclosure }: { disclosure?: string }) {
         <div style={st("display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: center; font-size: 14px;")}>
           <span style={st("display: flex; align-items: center; gap: 8px; color: #111111; font-weight: 600; letter-spacing: -0.03em;")}><Mark w={20} h={12} />noux</span>
           <Link className="nl" to="/campaigns" style={st("color: #6B6B6B;")}>Campaigns</Link>
-          <Link className="nl" to="/docs/quickstart" style={st("color: #6B6B6B;")}>Docs</Link>
-          <Link className="nl" to="/docs/quickstart#status" style={st("color: #6B6B6B;")}>Status</Link>
+          <Link className="nl" to="/docs/overview" style={st("color: #6B6B6B;")}>Docs</Link>
+          <Link className="nl" to="/docs/status" style={st("color: #6B6B6B;")}>Status</Link>
           <a className="nl" href="https://github.com/Emmythefirst/Noux" target="_blank" rel="noreferrer" style={st("color: #6B6B6B;")}>GitHub ↗</a>
         </div>
         <Disclosure text={disclosure} />

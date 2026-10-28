@@ -11,7 +11,7 @@ const GROUPS: { title: string; items: { label: string; to: string; icon: string 
   { title: "Explore", items: [
     { label: "Home", to: "/", icon: "M3 11l9-8 9 8M5 10v10h14V10" },
     { label: "Campaigns", to: "/campaigns", icon: "M4 6h16M4 12h16M4 18h10" },
-    { label: "Docs", to: "/docs/quickstart", icon: "M6 3h9l4 4v14H6zM14 3v5h5" },
+    { label: "Docs", to: "/docs/overview", icon: "M6 3h9l4 4v14H6zM14 3v5h5" },
   ] },
   { title: "Distributor", items: [
     { label: "Earnings", to: "/app/earnings", icon: "M3 3v18h18M7 15l4-4 3 3 5-6" },

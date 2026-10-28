@@ -80,7 +80,7 @@ buyer, price, ts, buyerSignature
 
 GET ${c.listing?.route.replace(/^GET /, "") ?? "<route>"}
 x-noux-claim: <claim>`}</pre>
-          <Link to="/docs/quickstart" style={st("font-size: 13px; font-weight: 500;")}>Agent guide →</Link>
+          <Link to="/docs/agents-and-claims" style={st("font-size: 13px; font-weight: 500;")}>Agent guide →</Link>
         </div>
       )}
       <p style={st("font-size: 12px; line-height: 17px; color: #6B6B6B; border-top: 1px solid #EBEBEB; padding-top: 12px;")}>Distributors earn a commission on this campaign. Tell your audience when you’re paid to recommend something.</p>
