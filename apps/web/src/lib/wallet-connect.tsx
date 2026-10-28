@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getWallets } from "@wallet-standard/app";
 import type { Wallet, WalletAccount } from "@wallet-standard/base";
 import type { SolanaSignMessageFeature, SolanaSignTransactionFeature } from "@solana/wallet-standard-features";
@@ -50,7 +50,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return () => off.forEach((f) => f());
   }, []);
 
+  const busyConnect = useRef(false);
   const doConnect = useCallback(async (w: Wallet, silent: boolean) => {
+    if (busyConnect.current) return; // a second click or a wallet re-registering must not open a second prompt
+    busyConnect.current = true;
     setConnecting(true); setError(null);
     try {
       const feat = (w.features as Feat)["standard:connect"] as { connect(i?: { silent?: boolean }): Promise<{ accounts: readonly WalletAccount[] }> };
@@ -59,7 +62,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (!a) throw new Error("The wallet returned no account.");
       setAccount({ wallet: w, account: a }); storage.set(w.name);
     } catch (e) { if (!silent) setError(friendly(e)); }
-    finally { setConnecting(false); }
+    finally { setConnecting(false); busyConnect.current = false; }
   }, []);
 
   // reconnect quietly to the last wallet, if it is still installed and still trusts this site
@@ -89,9 +92,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const { Connection } = await import("@solana/web3.js"); // loaded on first use: keeps the web3 library out of the landing bundle
       const rpc = new Connection(RPC_URL, "confirmed");
       const sig = await rpc.sendRawTransaction(out.signedTransaction, { skipPreflight: false });
-      const bh = tx.recentBlockhash!;
-      const lastValid = (await rpc.getLatestBlockhash("confirmed")).lastValidBlockHeight;
-      const res = await rpc.confirmTransaction({ signature: sig, blockhash: bh, lastValidBlockHeight: lastValid }, "confirmed");
+      // the validity window of the blockhash this transaction was BUILT with (not a fresher one: that would wait past its expiry)
+      const res = await rpc.confirmTransaction({ signature: sig, blockhash: tx.recentBlockhash!, lastValidBlockHeight: tx.lastValidBlockHeight! }, "confirmed");
       if (res.value.err) throw new Error("The transaction failed on-chain: " + JSON.stringify(res.value.err));
       return sig;
     } catch (e) { throw new Error(friendly(e)); }
@@ -113,5 +115,5 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
 export const getBlockhash = async () => {
   const { Connection } = await import("@solana/web3.js");
-  return (await new Connection(RPC_URL, "confirmed").getLatestBlockhash("confirmed")).blockhash;
+  return await new Connection(RPC_URL, "confirmed").getLatestBlockhash("confirmed"); // { blockhash, lastValidBlockHeight }
 };

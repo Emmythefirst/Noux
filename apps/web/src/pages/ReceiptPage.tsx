@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { st } from "../lib/css";
-import { ApiError, explorerAddr, useApi, useCopy, useNow, type Campaign, type Receipt } from "../lib/api";
+import { ApiError, apiGet, explorerAddr, useApi, useCopy, useNow, type Campaign, type Receipt } from "../lib/api";
 import { verifyReceipt, type StepState } from "../lib/verify";
 import { fmtAmount, fullUtc, mmss, short, pctOf, projectedSplit } from "../lib/format";
 import { isUnderpaid, openText, Addr, CopyIcon, Disclosure, ErrorState, Page, SampleBadge, STATUS_COLORS, TopNav, WakingBanner } from "../components/common";
@@ -91,7 +91,19 @@ function Verify({ r }: { r: Receipt }) {
 export default function ReceiptPage() {
   const { sale = "" } = useParams();
   const rc = useApi<Receipt>(`/receipts/${sale}`);
-  const r = rc.data;
+  // While the sale is open its status can change under you (settled by the keeper, refunded by the merchant). Refetch quietly (no loading flash,
+  // cache bypassed): every 8 s, and every 3 s once the hold has ended and settlement is due.
+  const [fresh, setFresh] = useState<Receipt | null>(null);
+  useEffect(() => { setFresh(null); }, [sale]);
+  const base = fresh ?? rc.data;
+  const holdEnded = !!base?.holdUntil && Date.now() >= new Date(base.holdUntil).getTime();
+  useEffect(() => {
+    if (!rc.data || base?.status !== "open") return;
+    let live = true;
+    const t = setInterval(() => { apiGet<Receipt>(`/receipts/${sale}`, undefined, true).then((x) => { if (live) setFresh(x); }).catch(() => { /* keep what we have */ }); }, holdEnded ? 3000 : 8000);
+    return () => { live = false; clearInterval(t); };
+  }, [rc.data, base?.status, holdEnded, sale]);
+  const r = base;
   const camp = useApi<Campaign>(r ? `/campaigns/${r.campaign}` : null);
   const now = useNow(1000);
   const [copied, copy] = useCopy();

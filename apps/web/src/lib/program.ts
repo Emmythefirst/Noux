@@ -78,8 +78,9 @@ export function refundSaleIx(a: RefundArgs): TransactionInstruction {
   });
 }
 
-export const newTx = (ix: TransactionInstruction, feePayer: PublicKey, blockhash: string) => {
-  const t = new Transaction({ feePayer, recentBlockhash: blockhash }); t.add(ix); return t;
+export interface Blockhash { blockhash: string; lastValidBlockHeight: number }
+export const newTx = (ix: TransactionInstruction, feePayer: PublicKey, bh: Blockhash) => {
+  const t = new Transaction({ feePayer, blockhash: bh.blockhash, lastValidBlockHeight: bh.lastValidBlockHeight }); t.add(ix); return t;
 };
 
 // ---- listing (merchant-signed message; mirrors packages/core/src/listing.ts) ----

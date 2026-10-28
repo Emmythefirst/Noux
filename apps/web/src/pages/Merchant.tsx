@@ -197,6 +197,7 @@ function RefundDialog({ sale, merchant, onClose, onDone }: { sale: Receipt; merc
     try {
       // rent payer is on the sale account on-chain; the API's receipt does not carry it, so read it from the chain here
       const acc = await fetch(RPC_URL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getAccountInfo", params: [sale.sale, { encoding: "base64", commitment: "confirmed" }] }) }).then((r) => r.json());
+      if (!acc?.result?.value) throw new Error("This sale no longer exists on-chain (it may have been settled or closed). Refresh the page.");
       const data = Uint8Array.from(atob(acc.result.value.data[0]), (c) => c.charCodeAt(0));
       if (data[244] !== 0) throw new Error("This sale is no longer open, so it can’t be refunded.");
       const rentPayer = new PublicKey(data.slice(104, 136));

@@ -43,4 +43,4 @@ Status: devnet, **no independent audit**. Read this before putting real money ne
 
 ## Reporting
 
-Email [YOUR EMAIL] with details. Please do not test against other people's campaigns.
+Email ehonemmanuel7@gmail.com with details. Please do not test against other people's campaigns.

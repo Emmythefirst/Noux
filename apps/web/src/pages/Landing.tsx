@@ -372,7 +372,7 @@ export default function Landing() {
             <p style={st("font-size: 16px; line-height: 24px; color: #333333; max-width: 560px;")}>Add the gateway, create a campaign, run the keeper. If you sell a paid x402 endpoint, we’ll help you set it up.</p>
             <div style={st("display: flex; gap: 12px; flex-wrap: wrap;")}>
               <Link className="press bi" to="/docs/quickstart" style={st("height: 44px; padding: 0 20px; border-radius: 9999px; background: #111111; color: #FFFFFF; font-size: 15px; font-weight: 500; display: inline-flex; align-items: center;")}>Read the quickstart</Link>
-              <a className="press bs" href="mailto:[YOUR EMAIL]" style={st("height: 44px; padding: 0 20px; border-radius: 9999px; background: #FFFFFF; color: #111111; border: 1px solid #D4D4D8; font-size: 15px; font-weight: 500; display: inline-flex; align-items: center;")}>Talk to the team</a>
+              <a className="press bs" href="mailto:ehonemmanuel7@gmail.com" style={st("height: 44px; padding: 0 20px; border-radius: 9999px; background: #FFFFFF; color: #111111; border: 1px solid #D4D4D8; font-size: 15px; font-weight: 500; display: inline-flex; align-items: center;")}>Talk to the team</a>
             </div>
           </div>
         </section>

@@ -72,6 +72,26 @@ describe("indexer sync", () => {
     const rows = (await pool.query("SELECT address FROM idx_sales")).rows.map((r) => r.address);
     expect(rows).not.toContain(S5); expect(rows).toContain(S1);
   });
+  it("an empty or short RPC answer never wipes settled/refunded receipts (only open sales can vanish)", async () => {
+    await syncOnce(pool, chain);
+    chain.snap.sales = []; chain.snap.campaigns = [];                       // a glitchy provider returns nothing
+    await syncOnce(pool, chain);
+    const rows = (await pool.query("SELECT address, status FROM idx_sales")).rows;
+    expect(rows.map((r) => r.address).sort()).toEqual([S1, S2, S3, S4, SB].sort());   // S5 was OPEN so it may go; the 5 final receipts stay
+    expect((await pool.query("SELECT count(*)::int n FROM idx_campaigns")).rows[0].n).toBe(2); // campaigns are never deleted
+  });
+  it("a stale snapshot cannot roll a settled sale back to open, or lower a campaign's counters", async () => {
+    const stale = snapshot(); stale.sales = stale.sales.map((x) => (x.address === S1 ? { ...x, status: "open" as const, gross: "0", merchantAmount: "0", commissionAmount: "0", feeAmount: "0", settledAt: null } : x));
+    stale.campaigns = stale.campaigns.map((x) => (x.address === A ? { ...x, settledCount: "0", refundedCount: "0", commissionSpent: "0" } : x));
+    await syncOnce(pool, chain);                                              // fresh: S1 settled
+    chain.snap = stale; await syncOnce(pool, chain);                          // a late, older snapshot arrives
+    expect((await pool.query("SELECT status, gross::text g FROM idx_sales WHERE address = $1", [S1])).rows[0]).toEqual({ status: "settled", g: "100000" });
+    expect((await pool.query("SELECT settled_count::text s, commission_spent::text c FROM idx_campaigns WHERE address = $1", [A])).rows[0]).toEqual({ s: "3", c: "20000" });
+    chain.snap = snapshot();                                                  // and a normal open -> settled progression still works
+    chain.snap.sales = chain.snap.sales.map((x) => (x.address === S5 ? { ...x, status: "settled" as const, gross: "100000", settledAt: NOW - 100 } : x));
+    await syncOnce(pool, chain);
+    expect((await pool.query("SELECT status FROM idx_sales WHERE address = $1", [S5])).rows[0].status).toBe("settled");
+  });
   it("a failed fetch changes nothing and surfaces the error", async () => {
     await syncOnce(pool, chain); const before = (await pool.query("SELECT count(*)::int n FROM idx_sales")).rows[0].n;
     chain.fail = true; await expect(syncOnce(pool, chain)).rejects.toThrow("rpc down");

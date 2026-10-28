@@ -20,7 +20,8 @@ export async function syncOnce(pool: pg.Pool, chain: IndexerChain, opts: { enric
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now())
          ON CONFLICT (address) DO UPDATE SET merchant=EXCLUDED.merchant, mint=EXCLUDED.mint, fee_owner=EXCLUDED.fee_owner, attribution_key=EXCLUDED.attribution_key, cluster=EXCLUDED.cluster,
            hold_secs=EXCLUDED.hold_secs, commission_bps=EXCLUDED.commission_bps, fee_bps=EXCLUDED.fee_bps, commission_budget=EXCLUDED.commission_budget, commission_spent=EXCLUDED.commission_spent,
-           settled_count=EXCLUDED.settled_count, refunded_count=EXCLUDED.refunded_count, updated_at=now()`,
+           settled_count=EXCLUDED.settled_count, refunded_count=EXCLUDED.refunded_count, updated_at=now()
+         WHERE EXCLUDED.settled_count >= idx_campaigns.settled_count AND EXCLUDED.refunded_count >= idx_campaigns.refunded_count AND EXCLUDED.commission_spent >= idx_campaigns.commission_spent`, // counters only grow: an older snapshot must not roll them back
         [k.address, k.merchant, k.mint, k.feeOwner, k.attributionKey, k.cluster, k.holdSecs, k.commissionBps, k.feeBps, k.commissionBudget, k.commissionSpent, k.settledCount, k.refundedCount],
       );
     }
@@ -30,11 +31,14 @@ export async function syncOnce(pool: pg.Pool, chain: IndexerChain, opts: { enric
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,to_timestamp($14),to_timestamp($15),to_timestamp($16),CASE WHEN $17::bigint IS NULL THEN NULL ELSE to_timestamp($17::bigint) END, $18, now())
          ON CONFLICT (address) DO UPDATE SET campaign=EXCLUDED.campaign, distributor=EXCLUDED.distributor, buyer=EXCLUDED.buyer, rent_payer=EXCLUDED.rent_payer, price=EXCLUDED.price, gross=EXCLUDED.gross,
            merchant_amount=EXCLUDED.merchant_amount, commission_amount=EXCLUDED.commission_amount, fee_amount=EXCLUDED.fee_amount, commission_bps=EXCLUDED.commission_bps, fee_bps=EXCLUDED.fee_bps,
-           status=EXCLUDED.status, opened_at=EXCLUDED.opened_at, hold_until=EXCLUDED.hold_until, expiry=EXCLUDED.expiry, settled_at=EXCLUDED.settled_at, vault_amount=EXCLUDED.vault_amount, updated_at=now()`,
+           status=EXCLUDED.status, opened_at=EXCLUDED.opened_at, hold_until=EXCLUDED.hold_until, expiry=EXCLUDED.expiry, settled_at=EXCLUDED.settled_at, vault_amount=EXCLUDED.vault_amount, updated_at=now()
+         WHERE idx_sales.status = 'open'`, // a settled or refunded receipt is final on-chain: a stale or overlapping snapshot must not change it
         [x.address, x.campaign, x.distributor, x.buyer, x.rentPayer, x.price, x.gross, x.merchantAmount, x.commissionAmount, x.feeAmount, x.commissionBps, x.feeBps, x.status, x.openedAt, x.holdUntil, x.expiry, x.settledAt, x.vaultAmount],
       );
     }
-    await c.query("DELETE FROM idx_sales WHERE NOT (address = ANY($1::text[]))", [snap.sales.map((s) => s.address)]);
+    // only OPEN sales can vanish (unpaid ones closed by close_expired_sale). Settled/refunded Sale accounts are permanent receipts, so a
+    // short or empty RPC answer must never wipe them.
+    await c.query("DELETE FROM idx_sales WHERE status = 'open' AND NOT (address = ANY($1::text[]))", [snap.sales.map((s) => s.address)]);
     await c.query(
       `INSERT INTO idx_state (id, last_synced_at, last_slot, last_error, last_error_at, campaigns, sales) VALUES (1, now(), $1, NULL, NULL, $2, $3)
        ON CONFLICT (id) DO UPDATE SET last_synced_at=now(), last_slot=$1, last_error=NULL, last_error_at=NULL, campaigns=$2, sales=$3`,
