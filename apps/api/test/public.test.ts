@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { Keypair, PublicKey } from "@solana/web3.js";
-import { LocalKeySigner, signListing, type CampaignInfo, type CampaignReader, type Listing } from "@noux/core";
+import { LocalKeySigner, signListing, signUnlist, type CampaignInfo, type CampaignReader, type Listing } from "@noux/core";
 import { createPool, migrate } from "../src/db";
 import { createApp } from "../src/app";
 import { syncOnce } from "../src/indexer/sync";
@@ -232,6 +232,45 @@ describe("public API: distributors and stats", () => {
   });
   it("/v1/index reports freshness and the last error", async () => {
     const r = (await get(mkApp(), "/v1/index")).body; expect(r).toMatchObject({ lastSlot: 777, campaigns: 2, sales: 6, lastError: null });
+  });
+});
+
+const delListing = (app: ReturnType<typeof mkApp>, address: string, o: { signer?: Keypair; ts?: number; sig?: Uint8Array; raw?: any } = {}) => {
+  const ts = o.ts ?? NOW, sig = o.sig ?? signUnlist((o.signer ?? merchantKey).secretKey, { campaign: new PublicKey(address), ts });
+  return app.request(`/v1/campaigns/${address}/listing`, { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify(o.raw ?? { ts, signature: Buffer.from(sig).toString("base64") }) });
+};
+
+describe("removing a listing from the directory", () => {
+  beforeEach(async () => { await syncOnce(pool, chain); });
+  it("only the on-chain merchant can remove it, and it leaves the directory but not the chain data", async () => {
+    const app = mkApp(); await putListing(app, A, listing);
+    expect((await get(app, "/v1/campaigns")).body.items.map((x: any) => x.address)).toEqual([A]);
+    expect((await delListing(app, A, { signer: Keypair.generate() })).status).toBe(401);   // someone else
+    expect((await delListing(app, A, { ts: NOW - 120 })).status).toBe(401);                // stale
+    expect((await delListing(app, A, { ts: NOW + 120 })).status).toBe(401);                // from the future
+    expect((await get(app, "/v1/campaigns")).body.items).toHaveLength(1);                  // still listed after every refusal
+    const ok = await delListing(app, A); expect(ok.status).toBe(200); expect((await ok.json() as any).removed).toBe(true);
+    expect((await get(app, "/v1/campaigns")).body.items).toHaveLength(0);                  // gone from the directory
+    const still = await get(app, `/v1/campaigns/${A}`); expect(still.status).toBe(200); expect(still.body.listing).toBeNull(); // campaign itself untouched (unlisted)
+    expect((await get(app, "/v1/stats")).body.totals.listedCampaigns).toBe(0);
+  });
+  it("is idempotent, and 404s for a campaign that does not exist", async () => {
+    const app = mkApp();
+    const r = await delListing(app, A); expect(r.status).toBe(200); expect((await r.json() as any).removed).toBe(false);
+    expect((await delListing(app, kp())).status).toBe(404);
+    expect((await delListing(app, "zzz", { sig: new Uint8Array(64) })).status).toBe(400);
+  });
+  it("a signed LISTING can never be replayed as a removal (domain separation), and bad bodies are refused", async () => {
+    const app = mkApp(); await putListing(app, A, listing);
+    const listSig = signListing(merchantKey.secretKey, { campaign: new PublicKey(A), listing, ts: NOW });
+    expect((await delListing(app, A, { sig: listSig })).status).toBe(401);
+    expect((await get(app, "/v1/campaigns")).body.items).toHaveLength(1);
+    expect((await delListing(app, A, { raw: "nope" })).status).toBe(400);
+    expect((await delListing(app, A, { raw: { ts: NOW, signature: "x".repeat(88), extra: 1 } })).status).toBe(400);
+  });
+  it("sends CORS for DELETE so the website can call it", async () => {
+    const r = await mkApp().request(`/v1/campaigns/${A}/listing`, { method: "OPTIONS", headers: { origin: "https://noux.vercel.app", "access-control-request-method": "DELETE" } });
+    expect(r.headers.get("access-control-allow-methods")).toMatch(/DELETE/);
   });
 });
 

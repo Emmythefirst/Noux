@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { PublicKey } from "@solana/web3.js";
 import nacl from "tweetnacl";
-import { LISTING_TAG } from "./brand";
+import { LISTING_TAG, UNLIST_TAG } from "./brand";
 
 export const LISTING_CATEGORIES = ["ai-text", "research-search", "data-feeds", "developer-tools", "other"] as const;
 export type ListingCategory = (typeof LISTING_CATEGORIES)[number];
@@ -31,4 +31,13 @@ export const signListing = (merchantSecret: Uint8Array, a: ListingAuth) => nacl.
 export function verifyListing(a: ListingAuth, signature: Uint8Array, merchant: PublicKey, nowSec: number, maxSkewSec = 60): boolean {
   if (Math.abs(nowSec - a.ts) > maxSkewSec) return false;
   return nacl.sign.detached.verify(listingMessage(a), signature, merchant.toBytes());
+}
+
+/** Remove a campaign from the directory. A different tag from the listing message, so a signed listing can never be replayed as a removal (or the reverse). */
+export interface UnlistAuth { campaign: PublicKey; ts: number }
+export const unlistMessage = (a: UnlistAuth) => Buffer.from(`${UNLIST_TAG}|${a.campaign.toBase58()}|${a.ts}`, "utf8");
+export const signUnlist = (merchantSecret: Uint8Array, a: UnlistAuth) => nacl.sign.detached(unlistMessage(a), merchantSecret);
+export function verifyUnlist(a: UnlistAuth, signature: Uint8Array, merchant: PublicKey, nowSec: number, maxSkewSec = 60): boolean {
+  if (Math.abs(nowSec - a.ts) > maxSkewSec) return false;
+  return nacl.sign.detached.verify(unlistMessage(a), signature, merchant.toBytes());
 }

@@ -1,4 +1,4 @@
-// Browser e2e (dev only): create a campaign with the listing step FAILING, then recover with "List this campaign" and "Edit listing". Same setup notes as wallet-e2e.mjs. Last run: 8/8.
+// Browser e2e (dev only): create with a FAILING listing step, recover with "List this campaign", edit, then "Remove from directory". Same setup notes as wallet-e2e.mjs. Last run: 11/11.
 import { chromium } from "playwright-core";
 import nacl from "tweetnacl";
 import fs from "node:fs";
@@ -88,6 +88,15 @@ await page.getByRole("button", { name: "Sign and update" }).click();
 await page.waitForTimeout(6000);
 const after2 = await (await fetch(`http://localhost:8787/v1/campaigns/${camp.address}`)).json();
 rec("edit updates the listing in place", after2.listing?.name === "Retry listing service v2", after2.listing?.name);
+// ---- remove from the directory ----
+await page.getByRole("button", { name: "Edit listing" }).click();
+await page.getByRole("button", { name: "Remove from directory" }).click();
+await page.getByRole("button", { name: "Sign and remove" }).click();
+await page.waitForTimeout(6000);
+const gone = await (await fetch(`http://localhost:8787/v1/campaigns/${camp.address}`)).json();
+rec("remove from directory: listing gone, campaign itself still there", gone.listing === null && gone.address === camp.address);
+rec("and it is no longer in the public directory", !(await (await fetch("http://localhost:8787/v1/campaigns?limit=100")).json()).items.some((c) => c.address === camp.address));
+rec("page offers 'List this campaign' again", await page.getByRole("button", { name: "List this campaign" }).isVisible());
 rec("no uncaught page errors", errs.length === 0, errs.join(" | "));
 console.log(`\n${results.filter(Boolean).length}/${results.length} checks passed`);
 await b.close(); process.exit(results.every(Boolean) ? 0 : 1);

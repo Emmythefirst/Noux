@@ -15,6 +15,7 @@ export const BRAND = {
 
 export const CLAIM_TAG = `${BRAND.tagPrefix}-CLAIM-v1`;
 export const LISTING_TAG = `${BRAND.tagPrefix}-LISTING-v1`;
+export const UNLIST_TAG = `${BRAND.tagPrefix}-UNLIST-v1`;
 export const CLAIM_REQUEST_TAG = `${BRAND.tagPrefix}-CLAIM-REQ-v1`;
 /** Length of CLAIM_TAG compiled into the program. A brand whose tag differs in length needs the Rust constant (and message length) updated. */
 export const PROGRAM_CLAIM_TAG_LEN = 13;

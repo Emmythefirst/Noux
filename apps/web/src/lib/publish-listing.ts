@@ -28,3 +28,11 @@ export function validateListing(l: ListingInput): string | null {
   if (!l.displayPrice.trim() || l.displayPrice.length > 20) return "Display price is required, for example $0.10.";
   return null;
 }
+
+/** Remove a campaign from the public directory (the campaign itself stays on-chain). Signed by the merchant wallet, like publishing. */
+export async function removeListing(campaign: string, signMessage: (m: Uint8Array) => Promise<Uint8Array>): Promise<void> {
+  const ts = Math.floor(Date.now() / 1000);
+  const sig = await signMessage(new TextEncoder().encode(`NOUX-UNLIST-v1|${campaign}|${ts}`));
+  const r = await fetch(`${API_BASE}/campaigns/${campaign}/listing`, { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ ts, signature: btoa(String.fromCharCode(...sig)) }) });
+  if (!r.ok) throw new Error(((await r.json().catch(() => null)) as any)?.error?.message ?? `HTTP ${r.status}`);
+}

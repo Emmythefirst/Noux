@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type pg from "pg";
 import { PublicKey } from "@solana/web3.js";
-import { LISTING_CATEGORIES, verifyListing, type CampaignReader, type Listing } from "@noux/core";
+import { LISTING_CATEGORIES, verifyListing, verifyUnlist, type CampaignReader, type Listing } from "@noux/core";
 
 export const DISCLOSURE =
   "Distributors earn a commission when a buyer they referred pays for this service. Listings and rankings are not endorsements. " +
@@ -231,6 +231,21 @@ export function publicRoutes(d: PublicDeps) {
        ON CONFLICT (campaign) DO UPDATE SET name=$2, description=$3, category=$4, endpoint_url=$5, route=$6, display_price=$7, website=$8, is_sample=$9, updated_at=now()`,
       [a, st.name, st.description, st.category, st.endpointUrl, st.route, st.displayPrice, st.website ?? null, st.isSample]);
     return c.json({ ok: true, campaign: a, listing: st });
+  });
+
+  /* ---------- merchant-signed removal from the directory ---------- */
+  app.delete("/campaigns/:address/listing", async (c) => {
+    const a = c.req.param("address"); if (!isPk(a)) return bad(c, 400, "bad_request", "invalid address");
+    let json: unknown; try { json = await c.req.json(); } catch { return bad(c, 400, "bad_request", "body must be JSON"); }
+    const b = z.object({ ts: z.number().int(), signature: z.string().min(80).max(100) }).strict().safeParse(json);
+    if (!b.success) return bad(c, 400, "bad_request", "invalid body");
+    let sig: Buffer; try { sig = Buffer.from(b.data.signature, "base64"); } catch { sig = Buffer.alloc(0); }
+    const camp = await d.campaigns.get(new PublicKey(a));
+    if (!camp) return bad(c, 404, "campaign_not_found", "no such campaign on-chain");
+    // merchant read from the chain, as for listing: only the wallet that created the campaign can remove it
+    if (sig.length !== 64 || !verifyUnlist({ campaign: new PublicKey(a), ts: b.data.ts }, sig, camp.merchant, now())) return c.json({ error: { code: "bad_signature", message: "removal must be signed by the campaign's merchant wallet and be fresh (60s)" } }, 401 as any);
+    const r = await d.pool.query("DELETE FROM listings WHERE campaign = $1", [a]);
+    return c.json({ ok: true, campaign: a, removed: (r.rowCount ?? 0) > 0 }); // idempotent: removing an unlisted campaign is fine
   });
 
   /* ---------- index freshness ---------- */

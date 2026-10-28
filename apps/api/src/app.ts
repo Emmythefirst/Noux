@@ -12,7 +12,7 @@ const body = z.object({
 export function createApp(deps: Deps, opts: { trustProxy: boolean; clientIp?: (c: any) => string; public?: PublicDeps; readLimitPerMin?: number } = { trustProxy: false }) {
   const app = new Hono();
   // Browsers (the directory UI, buyer agents in a page) call this API cross-origin. No cookies or credentials are used anywhere.
-  app.use("*", cors({ origin: "*", allowMethods: ["GET", "POST", "PUT", "OPTIONS"], allowHeaders: ["content-type"], maxAge: 600 }));
+  app.use("*", cors({ origin: "*", allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], allowHeaders: ["content-type"], maxAge: 600 }));
   const ipOf = (c: any): string => {
     if (opts.clientIp) return opts.clientIp(c);
     if (opts.trustProxy) { const f = c.req.header("x-forwarded-for"); if (f) return f.split(",")[0].trim(); }

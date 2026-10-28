@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { st } from "../lib/css";
 import type { Listing } from "../lib/api";
 import { CATEGORIES, short } from "../lib/format";
-import { publishListing, validateListing } from "../lib/publish-listing";
+import { publishListing, removeListing, validateListing } from "../lib/publish-listing";
 import { useWallet } from "../lib/wallet-connect";
 
 const FIELD = "height: 40px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 8px; font: 400 14px Inter, sans-serif; color: #111111; background: #FFFFFF; width: 100%;";
@@ -18,6 +18,12 @@ export function ListingModal({ campaign, existing, onClose, onDone }: { campaign
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && !busy && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose, busy]);
+
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const remove = async () => {
+    setBusy(true); setErr(null);
+    try { await removeListing(campaign, w.signMessage); onDone(); } catch (e) { setErr((e as Error).message); setBusy(false); setConfirmRemove(false); }
+  };
 
   const submit = async () => {
     const listing = { name: name.trim(), description: desc.trim(), category: cat, endpointUrl: url.trim(), route: route.trim(), displayPrice: price.trim(), isSample: existing?.isSample ?? false };
@@ -49,6 +55,15 @@ export function ListingModal({ campaign, existing, onClose, onDone }: { campaign
         </fieldset>
         {err && <p role="alert" style={st("font-size: 13px; line-height: 18px; color: #B42318;")}>{err}</p>}
         {busy && <p role="status" style={st("font-size: 13px; color: #333333;")}>Approve the message in your wallet, then publishing…</p>}
+        {existing && (confirmRemove ? (
+          <div role="alert" style={st("border: 1px solid #F5D9A8; background: rgba(138,75,0,0.05); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 18px; color: #333333;")}>
+            <span>Remove this campaign from the directory? It stays on-chain and keeps working for anyone with the link. You can list it again later.</span>
+            <div style={st("display: flex; gap: 8px;")}>
+              <button className="press bd" type="button" disabled={busy} onClick={() => void remove()} style={{ ...st("height: 32px; padding: 0 12px; border: 0; background: #D92D20; border-radius: 10px; font: 500 13px Inter, sans-serif; color: #FFFFFF; cursor: pointer;"), opacity: busy ? 0.6 : 1 }}>Sign and remove</button>
+              <button className="press bs" type="button" disabled={busy} onClick={() => setConfirmRemove(false)} style={st("height: 32px; padding: 0 12px; border: 1px solid #D4D4D8; background: #FFFFFF; border-radius: 10px; font: 500 13px Inter, sans-serif; color: #111111; cursor: pointer;")}>Keep it listed</button>
+            </div>
+          </div>
+        ) : <button type="button" disabled={busy} onClick={() => setConfirmRemove(true)} style={st("align-self: flex-start; border: 0; background: none; padding: 0; color: #B42318; font: 500 13px Inter, sans-serif; cursor: pointer;")}>Remove from directory</button>)}
         <div style={st("display: flex; gap: 8px; justify-content: flex-end;")}>
           <button className="press bs" type="button" disabled={busy} onClick={onClose} style={st("height: 36px; padding: 0 14px; border: 1px solid #D4D4D8; background: #FFFFFF; border-radius: 10px; font: 500 13px Inter, sans-serif; color: #111111; cursor: pointer;")}>Cancel</button>
           <button className="press bp" type="button" disabled={busy} onClick={() => void submit()} style={{ ...st("height: 36px; padding: 0 16px; border: 0; background: #0F766E; border-radius: 10px; font: 500 13px Inter, sans-serif; color: #FFFFFF; cursor: pointer;"), opacity: busy ? 0.6 : 1 }}>{existing ? "Sign and update" : "Sign and publish"}</button>
