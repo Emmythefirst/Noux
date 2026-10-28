@@ -85,6 +85,9 @@ export function vaultFundedCheck(conn: Connection, mint: PublicKey, isSale: (pay
 }
 
 /* ---------------- keeper adapter ---------------- */
+/** Byte offset of Sale.status (8 discriminator + 4 pubkeys + nonce + 9 u64/i64 + 2 u16); Open is variant 0 = base58 "1". A test re-derives it from the IDL. */
+export const SALE_STATUS_OFFSET = 244;
+export const OPEN_STATUS_B58 = "1";
 import type { KeeperChain, OpenSale } from "./keeper";
 
 export class AnchorKeeperChain implements KeeperChain {
@@ -102,7 +105,8 @@ export class AnchorKeeperChain implements KeeperChain {
 
   async listOpenSales(): Promise<OpenSale[]> {
     const size = (this.program.account as any).sale.size as number;
-    const raw = await this.o.connection.getProgramAccounts(this.o.programId, { filters: [{ dataSize: size }], commitment: "confirmed" });
+    // Only OPEN sales: settled/refunded receipts accumulate forever and must not be downloaded on every tick.
+    const raw = await this.o.connection.getProgramAccounts(this.o.programId, { filters: [{ dataSize: size }, { memcmp: { offset: SALE_STATUS_OFFSET, bytes: OPEN_STATUS_B58 } }], commitment: "confirmed" });
     const out: OpenSale[] = [];
     for (const { pubkey, account } of raw) {
       let s: any; try { s = this.program.coder.accounts.decode("sale", account.data); } catch { continue; } // legacy layouts are skipped, not fatal

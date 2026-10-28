@@ -36,6 +36,8 @@ export interface NouxGatewayConfig {
   settler?: SaleSettler;
   /** "GET /path" -> spec. The claim's price must equal the route's price exactly. */
   routes: Record<string, RouteSpec>;
+  /** How long the buyer's response may wait for the merchant's settle-after-delivery (default 0: never; the settle runs detached). */
+  settleAfterDeliveryWaitMs?: number;
   minClaimLifeSecs?: number;
   now?: () => number;
   onEvent?: (e: GatewayEvent) => void;
@@ -43,6 +45,7 @@ export interface NouxGatewayConfig {
 }
 
 const MAX_TRACKED = 10_000;
+const SETTLE_DEADLINE_MS = 60_000;
 
 /**
  * Express middleware that makes a paid x402 route referral-aware.
@@ -99,10 +102,22 @@ export function createNouxGateway(cfg: NouxGatewayConfig) {
   });
 
   server.onAfterSettle(async ({ requirements }) => {
-    const claim = sales.get(requirements.payTo);
+    const sale = requirements.payTo;
+    const claim = sales.get(sale);
     if (!claim || !cfg.settler) return; // merchant payment, or sweeper will settle after the hold
-    try { emit({ type: "settle_after_delivery", sale: requirements.payTo, signature: await cfg.settler.settle(claim) }); }
-    catch (e) { emit({ type: "settle_after_delivery_failed", sale: requirements.payTo, error: String((e as Error).message).slice(0, 200) }); }
+    // The buyer has paid and been served: their response must not wait for a second on-chain transaction. The settle runs
+    // detached (the keeper is the backstop) with a hard deadline so a hung RPC cannot leak work forever.
+    const run = new Promise<void>((done) => {
+      let over = false;
+      const timer = setTimeout(() => { over = true; emit({ type: "settle_after_delivery_failed", sale, error: "timed out; the keeper settles after the hold" }); done(); }, SETTLE_DEADLINE_MS);
+      timer.unref?.();
+      cfg.settler!.settle(claim).then(
+        (signature) => { clearTimeout(timer); if (!over) emit({ type: "settle_after_delivery", sale, signature }); },
+        (e) => { clearTimeout(timer); if (!over) emit({ type: "settle_after_delivery_failed", sale, error: String((e as Error).message).slice(0, 200) }); },
+      ).finally(done);
+    });
+    const wait = cfg.settleAfterDeliveryWaitMs ?? 0;
+    if (wait > 0) await Promise.race([run, new Promise((r) => setTimeout(r, wait).unref?.())]);
   });
 
   const routes: Record<string, any> = {};

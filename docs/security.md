@@ -33,6 +33,11 @@ Status: devnet, **no independent audit**. Read this before putting real money ne
 - The website never sees a private key. Every transaction and message is approved in the user's wallet.
 - Receipt verification checks against a Solana node directly. It does not cover transactions that use address lookup tables.
 
+## The gateway payer's SOL float
+
+- Opening a sale happens on the buyer's first (unpaid) request, before any payment, and the gateway payer fronts about 0.0034 SOL of rent for it. Anyone can create free buyer wallets and ask the claim service for claims, so the claim limits (30 per distributor, 10 per buyer, 60 per IP, 120 per campaign, per minute) are the only brake: at the campaign limit an attacker can tie up roughly 0.4 SOL per minute until those unpaid sales expire (10 minutes) and the keeper closes them and returns the rent. A payer with a small float then runs dry, the gateway **fails open** (the buyer still buys, the merchant is paid in full, the referral is lost) and no money is stolen. This is analysis of the code and the limits, not something we have attacked live.
+- Keep the payer funded for the campaign limit, watch its balance (the demo merchant's `/v1/status` reports it), and run a keeper so expired sales are closed.
+
 ## The buy page (`/buy/<campaign>?ref=<wallet>`)
 
 - **The endpoint, not the listing, sets the price and the payee.** The page reads the amount, asset and `payTo` from the service's own `402` answer and asks for a claim at that price. It does not compare them with the price in the merchant's listing or check the asset. A merchant (or anyone who controls a listed endpoint URL) can therefore ask for more than the listing says, up to the claim service's maximum price. The only safeguards are the wallet's approval prompt, which the buyer must read, and the price shown on the page, which comes from the same `402` answer.
@@ -49,7 +54,7 @@ Status: devnet, **no independent audit**. Read this before putting real money ne
 - A commission budget is a cap, not escrow; there is no top-up and no campaign pause/close instruction.
 - Rust unit tests do not exist; the program is tested through TypeScript scripts against a local validator and devnet (22 + 13 + 13 checks, with mutation checks for the fee rules).
 - Real wallet coverage: create, list/edit, refund and a buy-page payment were confirmed with Phantom on devnet; other wallets are untested.
-- Untested at scale: the gateway under heavy load, and the merchant console on a phone-sized screen.
+- Untested at scale: the gateway against a real chain and facilitator under load (the concurrency tests use a fake chain and facilitator), the indexer and keeper beyond a few hundred sales (the indexer reads every Sale account each minute), and the merchant console on a phone-sized screen.
 
 ## Reporting
 

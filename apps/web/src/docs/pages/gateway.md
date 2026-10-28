@@ -6,8 +6,8 @@ The gateway is Express middleware that makes a paid x402 route referral-aware. I
 
 - A paid x402 route on Solana, and an x402 facilitator account (the sample merchant uses Coinbase CDP).
 - A **campaign** created from the merchant console. You pass its address to the gateway.
-- A **gateway payer key**: a small SOL-funded keypair on your server. It pays the rent for each per-sale vault; the rent comes back when the sale settles. It cannot refund and cannot touch your earnings.
-- Optionally a **merchant signer key**. If you provide it the gateway settles each sale right after you deliver; without it the [keeper](/docs/keeper) settles after the hold.
+- A **gateway payer key**: a small SOL-funded keypair on your server. It pays the rent when a referred sale opens: about 0.0034 SOL at today's devnet rates, of which the vault part (about 0.0015 SOL) comes back when the sale settles and the receipt part (about 0.0019 SOL) **stays locked in the sale's on-chain receipt for good**. An unpaid sale that expires is closed and all of it returns. For a very cheap endpoint the permanent part can exceed the price of one call, so price referred routes with that in mind. It cannot refund and cannot touch your earnings.
+- Optionally a **merchant signer key**. If you provide it the gateway settles each sale right after you deliver (in the background: the buyer's response does not wait for it); without it the [keeper](/docs/keeper) settles after the hold.
 
 ## Wiring it up
 

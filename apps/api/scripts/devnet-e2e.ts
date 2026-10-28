@@ -109,7 +109,8 @@ const buyerPay = await payFetch(buyer);
   rec("API issued a claim bound to the buyer, signed by the attribution key", c.buyer.equals(buyer.publicKey) && c.attributionKey.equals(attest.publicKey) && c.price === PRICE);
   const before = await snap();
   const r = await call(buyerPay, gw.url, w);
-  await sleep(3000);
+  // settle-after-delivery runs detached from the buyer's response: wait for it (up to 30 s) instead of a fixed pause
+  for (let i = 0; i < 60 && !gw.events.some((e) => e.type === "settle_after_delivery" || e.type === "settle_after_delivery_failed"); i++) await sleep(500);
   const after = await snap(); const sale = salePda(PROGRAM, campaign, c.nonce);
   const s: any = await (program.account as any).sale.fetch(sale);
   rec("1. paid call WITH claim through the gateway: 200 + resource served", r.status === 200 && r.body.includes("ok"), `status=${r.status} x402 tx=${r.tx}`);
