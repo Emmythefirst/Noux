@@ -57,7 +57,7 @@ Status: devnet, **no independent audit**. Read this before putting real money ne
 - A commission budget is a cap, not escrow; there is no top-up and no campaign pause/close instruction.
 - Rust unit tests do not exist; the program is tested through TypeScript scripts against a local validator and devnet (22 + 13 + 13 checks, with mutation checks for the fee rules).
 - Real wallet coverage: create, list/edit, refund and a buy-page payment were confirmed with Phantom on devnet; Solflare, Backpack and every other wallet are untested (only a Wallet Standard mock was run), and so is anything on mainnet.
-- Untested at scale: the gateway against a real chain and facilitator under load (the concurrency tests use a fake chain and facilitator), the indexer and keeper beyond a few hundred sales (the indexer reads every Sale account each minute), and the merchant console on a phone-sized screen.
+- Untested at scale: the gateway against a real chain and facilitator under load (the concurrency tests use a fake chain and facilitator), the indexer and keeper beyond a few hundred sales (the indexer reads every Sale account each minute). The merchant console was checked on phone-sized screens (320 to 390 px) in headless Chromium only, not on real devices.
 
 ## Reporting
 
