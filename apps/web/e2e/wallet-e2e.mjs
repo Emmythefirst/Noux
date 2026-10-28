@@ -89,9 +89,9 @@ await page.goto("http://localhost:5173/app/merchant", { waitUntil: "domcontentlo
 let row = null;
 for (let i = 0; i < 12 && !row; i++) { await page.waitForTimeout(5000); await page.reload({ waitUntil: "domcontentloaded" }); await page.waitForTimeout(4000); if (await page.getByText(sale.slice(0, 4) + "…" + sale.slice(-4)).first().isVisible().catch(() => false)) row = true; }
 rec("the funded sale appears in the merchant's table as Held", !!row);
-for (let i = 0; i < 12 && !(await page.getByRole("button", { name: "Refund sale" }).count()); i++) { await page.waitForTimeout(5000); await page.reload({ waitUntil: "domcontentloaded" }); await page.waitForTimeout(4000); }
-rec("the funded sale offers a Refund action (index saw the vault balance)", (await page.getByRole("button", { name: "Refund sale" }).count()) > 0);
-await page.getByRole("button", { name: "Refund sale" }).first().click({ force: true });
+for (let i = 0; i < 12 && !(await page.getByRole("button", { name: "Refund", exact: true }).count()); i++) { await page.waitForTimeout(5000); await page.reload({ waitUntil: "domcontentloaded" }); await page.waitForTimeout(4000); }
+rec("the funded sale offers a Refund action (index saw the vault balance)", (await page.getByRole("button", { name: "Refund", exact: true }).count()) > 0);
+await page.getByRole("button", { name: "Refund", exact: true }).first().click();
 await page.getByRole("alertdialog").getByRole("button", { name: "Refund sale" }).click();
 await page.waitForSelector("text=Sale refunded", { timeout: 90000 }).catch(() => {});
 rec("refund: wallet approved, toast shown", await page.getByText("Sale refunded").isVisible().catch(() => false), (await page.getByRole("alert").allInnerTexts().catch(() => [])).join(" | "));

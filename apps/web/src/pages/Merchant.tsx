@@ -3,7 +3,7 @@ import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { st } from "../lib/css";
 import { API_BASE, apiGet, useIndexFreshness, useApi, useNow, type Campaign, type Page as ApiPage, type Receipt } from "../lib/api";
 import { PublicKey } from "@solana/web3.js";
-import { CATEGORIES, dayTime, fmt2, fmtAmount, fmtShort, mmss, short } from "../lib/format";
+import { CATEGORIES, projectedSplit, dayTime, fmt2, fmtAmount, fmtShort, mmss, short } from "../lib/format";
 import { campaignPda, createCampaignIx, listingMessage, newTx, parseAmount, refundSaleIx } from "../lib/program";
 import { getBlockhash, useWallet } from "../lib/wallet-connect";
 import { RPC_URL } from "../lib/verify";
@@ -319,7 +319,7 @@ export default function Merchant() {
                   {sales.loading ? <p role="status" style={st("padding: 24px; font-size: 13px; color: #6B6B6B;")}>Loading sales…</p> : sales.error ? <p role="alert" style={st("padding: 24px; font-size: 13px; color: #B42318;")}>Couldn’t load sales.</p> : rs.length > 0 ? (
                     <table style={st("width: 100%; min-width: 760px; border-collapse: collapse; font-size: 14px;")}>
                       <thead><tr style={st("height: 40px; text-align: left;")}>
-                        {[["Sale", "padding: 0 12px 0 16px;"], ["Service", "padding: 0 12px;"], ["Distributor", "padding: 0 12px;"], ["Status", "padding: 0 12px;"], ["Paid", "padding: 0 12px; text-align: right;"], ["Commission", "padding: 0 12px; text-align: right;"], ["", "padding: 0 16px 0 12px; width: 112px;"]].map(([h, s], i) => <th key={i} scope="col" style={st("font-size: 12px; font-weight: 500; color: #6B6B6B; border-bottom: 1px solid #EBEBEB; " + s)}>{h || <span className="vh">Actions</span>}</th>)}
+                        {[["Sale", "padding: 0 12px 0 16px;"], ["Service", "padding: 0 12px;"], ["Distributor", "padding: 0 12px;"], ["Status", "padding: 0 12px;"], ["Paid", "padding: 0 12px; text-align: right;"], ["Commission", "padding: 0 12px; text-align: right;"], ["Action", "padding: 0 16px 0 12px; width: 96px; text-align: right;"]].map(([h, s], i) => <th key={i} scope="col" style={st("font-size: 12px; font-weight: 500; color: #6B6B6B; border-bottom: 1px solid #EBEBEB; " + s)}>{h}</th>)}
                       </tr></thead>
                       <tbody>
                         {rs.slice(0, limit).map((r) => {
@@ -331,9 +331,9 @@ export default function Merchant() {
                               <td className="mono" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; font-size: 12px; color: #333333; white-space: nowrap;")}>{short(r.parties.distributor)}</td>
                               <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB;")}><SaleBadge status={r.status} text={r.status === "open" ? openText(r, left) : undefined} /></td>
                               <td className="tn" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right; color: #111111;")}>{fmtAmount(r.status === "open" ? r.vaultAmount : r.gross, r.decimals)}</td>
-                              <td className="tn" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right; color: #111111;")}>{r.status === "refunded" ? "—" : fmtAmount(r.split.distributor, r.decimals)}</td>
+                              <td className="tn" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right; color: #111111;")}>{r.status === "refunded" ? "—" : r.status === "open" ? <span style={st("color: #6B6B6B;")} title="What it will pay if it settles">{r.funded ? fmtAmount(projectedSplit(r.vaultAmount, r.policy.commissionBps, r.policy.feeBps).distributor, r.decimals) : "—"}</span> : fmtAmount(r.split.distributor, r.decimals)}</td>
                               <td style={st("padding: 0 16px 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right;")}>
-                                {r.status === "open" && r.funded && <button className="press bs ra" type="button" onClick={() => setConfirm(r)} style={st("opacity: 0; height: 24px; padding: 0 8px; border: 1px solid #D4D4D8; background: #FFFFFF; border-radius: 6px; font: 500 12px Inter, sans-serif; color: #111111; cursor: pointer; transition: opacity 150ms;")}>Refund sale</button>}
+                                {r.status === "open" && r.funded && <button className="press bs" type="button" onClick={() => setConfirm(r)} style={st("height: 28px; padding: 0 10px; border: 1px solid #D4D4D8; background: #FFFFFF; border-radius: 8px; font: 500 12px Inter, sans-serif; color: #111111; cursor: pointer;")}>Refund</button>}
                               </td>
                             </tr>
                           );
