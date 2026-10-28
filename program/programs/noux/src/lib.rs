@@ -406,6 +406,8 @@ pub struct OpenSale<'info> {
 }
 
 #[derive(Accounts)]
+/// merchant_ata / distributor_ata / fee_ata are `dup`: one wallet may hold several roles (a merchant referring its own
+/// sale, or the fee wallet being a merchant). Without `dup` Anchor rejects the settle with ConstraintDuplicateMutableAccount.
 pub struct SettleSale<'info> {
     pub caller: Signer<'info>,
     #[account(mut, address = sale.campaign)]
@@ -414,11 +416,11 @@ pub struct SettleSale<'info> {
     pub sale: Box<Account<'info, Sale>>,
     #[account(mut, associated_token::mint = campaign.mint, associated_token::authority = sale)]
     pub sale_vault: Box<Account<'info, TokenAccount>>,
-    #[account(mut, associated_token::mint = campaign.mint, associated_token::authority = campaign.merchant)]
+    #[account(mut, dup, associated_token::mint = campaign.mint, associated_token::authority = campaign.merchant)]
     pub merchant_ata: Box<Account<'info, TokenAccount>>,
-    #[account(mut, associated_token::mint = campaign.mint, associated_token::authority = sale.distributor)]
+    #[account(mut, dup, associated_token::mint = campaign.mint, associated_token::authority = sale.distributor)]
     pub distributor_ata: Box<Account<'info, TokenAccount>>,
-    #[account(mut, associated_token::mint = campaign.mint, associated_token::authority = campaign.fee_owner)]
+    #[account(mut, dup, associated_token::mint = campaign.mint, associated_token::authority = campaign.fee_owner)]
     pub fee_ata: Box<Account<'info, TokenAccount>>,
     /// CHECK: receives the vault's rent back; must be whoever paid it.
     #[account(mut, address = sale.rent_payer)]
