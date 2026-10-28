@@ -60,10 +60,10 @@ export default function Distributor() {
         </div>
       }
       nav={[
-        { label: "Earnings", icon: "M3 3v18h18M7 15l4-4 3 3 5-6", current: true, to: wallet ? `/app/earnings?wallet=${wallet}` : "/app/earnings" },
-        { label: "Campaigns", icon: "M4 6h16M4 12h16M4 18h10", to: "/campaigns" },
-        { label: "Referral links", icon: "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1", to: "/app/earnings#links" },
-        { label: "Receipts", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2V3zM9 8h6M9 12h6", to: "/receipts", count: info ? String(info.metrics.eligiblePurchases) : undefined },
+        { label: "My earnings", icon: "M3 3v18h18M7 15l4-4 3 3 5-6", current: true, to: wallet ? `/app/earnings?wallet=${wallet}` : "/app/earnings" },
+        { label: "My campaigns", icon: "M4 6h16M4 12h16M4 18h10", to: `/app/earnings${wallet ? `?wallet=${wallet}` : ""}#campaigns` },
+        { label: "Referral links", icon: "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1", to: `/app/earnings${wallet ? `?wallet=${wallet}` : ""}#links` },
+        { label: "My receipts", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2V3zM9 8h6M9 12h6", to: `/app/earnings${wallet ? `?wallet=${wallet}` : ""}#activity`, count: info ? String(info.metrics.eligiblePurchases) : undefined },
         { label: "Settings", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12h2M18 12h2M12 4v2M12 18v2", to: "/settings" },
       ]}
       extra={
@@ -215,7 +215,7 @@ export default function Distributor() {
           <p style={st("font-size: 12px; color: #6B6B6B;")}>Distributors earn a commission on this campaign. When you recommend it, say that you’re paid if someone buys.</p>
         </section>
 
-        <section aria-labelledby="c-h" style={st("display: flex; flex-direction: column; gap: 12px;")}>
+        <section id="campaigns" aria-labelledby="c-h" style={st("display: flex; flex-direction: column; gap: 12px;")}>
           <h2 id="c-h" style={st(H2)}>Campaigns you promote</h2>
           {info.byCampaign.length === 0 ? <p style={st("font-size: 13px; color: #6B6B6B;")}>No sales through this address yet.</p> : (
             <div style={st("border: 1px solid #EBEBEB; border-radius: 12px; overflow-x: auto;")}>
@@ -250,7 +250,7 @@ export default function Distributor() {
           )}
         </section>
 
-        <section aria-labelledby="a-h" style={st("display: flex; flex-direction: column; gap: 12px;")}>
+        <section id="activity" aria-labelledby="a-h" style={st("display: flex; flex-direction: column; gap: 12px;")}>
           <h2 id="a-h" style={st(H2)}>Recent activity</h2>
           {recent.length === 0 ? <p style={st("font-size: 13px; color: #6B6B6B;")}>Nothing yet.</p> : (
             <ol style={st("list-style: none; margin: 0; padding: 0; border: 1px solid #EBEBEB; border-radius: 12px;")}>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { st } from "../lib/css";
 import { API_BASE, apiGet, useIndexFreshness, useApi, useNow, type Campaign, type Page as ApiPage, type Receipt } from "../lib/api";
 import { PublicKey } from "@solana/web3.js";
@@ -16,6 +16,14 @@ import { openText, DevnetBadge, Dot, ErrorState, Freshness, SampleBadge, SaleBad
 
 const H2 = "font-size: 16px; line-height: 20px; letter-spacing: -0.01em; font-weight: 500; color: #111111;";
 const SAMPLE_MERCHANT = "4Gb6hyx49dTZN1p1dagrcJne5tYNxYqaDXJZVkb29nT7"; // the Noux demo merchant wallet
+const SECTION_TITLE: Record<string, [string, string]> = {
+  overview: ["Overview", "Sales across your campaigns."],
+  campaigns: ["My campaigns", "Every campaign created by this wallet, with its terms and budget."],
+  sales: ["My sales", "Every sale on your campaigns. Held sales can be refunded until they settle."],
+  receipts: ["My receipts", "The public receipt for each of your sales: what you kept, what distributors earned, the protocol fee."],
+  budget: ["Budget", "Your commission budget per campaign. It is a cap, not locked money."],
+  distributors: ["Distributors", "Who has sold for you, and what they have earned."],
+};
 const MAX_CAMPAIGNS = 8;
 const FEE_BPS = 100;
 type Tab = "all" | "open" | "settled" | "refunded";
@@ -219,7 +227,11 @@ export default function Merchant() {
   const [toast, setToast] = useState<{ text: string; to?: string } | null>(null);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 8000); return () => clearTimeout(t); }, [toast]);
   const pick = (a: string) => { setSaved(a); setSp({ wallet: a }); };
+  const { pathname } = useLocation();
+  const section = (["campaigns", "sales", "receipts", "budget", "distributors"] as const).find((x) => pathname === `/app/merchant/${x}`) ?? "overview";
+  const keep = sp.get("wallet") && isPubkey(sp.get("wallet")!) ? `?wallet=${sp.get("wallet")}` : ""; // a pasted address stays in the URL as you move between sections
   const [tab, setTab] = useState<Tab>("all");
+  const [salesLimit, setSalesLimit] = useState(25);
   const [creating, setCreating] = useState(false);
   const [confirm, setConfirm] = useState<Receipt | null>(null);
   const fresh = useIndexFreshness();
@@ -240,17 +252,17 @@ export default function Merchant() {
         </div>
       }
       nav={[
-        { label: "Overview", icon: "M3 12h4l3-8 4 16 3-8h4", current: true, to: wallet ? `/app/merchant?wallet=${wallet}` : "/app/merchant" },
-        { label: "Campaigns", icon: "M4 6h16M4 12h16M4 18h10", count: wallet && list.data ? String(mine.length) : undefined },
-        { label: "Sales", icon: "M3 3v18h18M7 15l4-4 3 3 5-6", count: sales.items.length ? String(sales.items.length) : undefined },
-        { label: "Receipts", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2V3zM9 8h6M9 12h6", to: "/receipts" },
-        { label: "Budget", icon: "M3 7h18v12H3zM16 13h2M3 7l3-4h12l3 4" },
-        { label: "Distributors", icon: "M16 19v-1a4 4 0 0 0-8 0v1M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" },
+        { label: "Overview", icon: "M3 12h4l3-8 4 16 3-8h4", current: section === "overview", to: `/app/merchant${keep}` },
+        { label: "My campaigns", icon: "M4 6h16M4 12h16M4 18h10", current: section === "campaigns", to: `/app/merchant/campaigns${keep}`, count: wallet && list.data ? String(mine.length) : undefined },
+        { label: "My sales", icon: "M3 3v18h18M7 15l4-4 3 3 5-6", current: section === "sales", to: `/app/merchant/sales${keep}`, count: sales.items.length ? String(sales.items.length) : undefined },
+        { label: "My receipts", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2V3zM9 8h6M9 12h6", current: section === "receipts", to: `/app/merchant/receipts${keep}` },
+        { label: "Budget", icon: "M3 7h18v12H3zM16 13h2M3 7l3-4h12l3 4", current: section === "budget", to: `/app/merchant/budget${keep}` },
+        { label: "Distributors", icon: "M16 19v-1a4 4 0 0 0-8 0v1M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", current: section === "distributors", to: `/app/merchant/distributors${keep}` },
         { label: "Settings", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12h2M18 12h2M12 4v2M12 18v2", to: "/settings" },
       ]}
       extra={shown.length > 0 ? (
         <div style={st("display: flex; flex-direction: column; gap: 4px;")}>
-          <span style={st("font-size: 12px; font-weight: 500; color: #6B6B6B; padding: 8px 8px 4px;")}>Campaigns</span>
+          <span style={st("font-size: 12px; font-weight: 500; color: #6B6B6B; padding: 8px 8px 4px;")}>Your campaigns</span>
           {shown.slice(0, 5).map((c) => <Link key={c.address} className="nv" to={`/campaigns/${c.address}`} style={st("height: 32px; padding: 0 8px; border-radius: 8px; display: flex; align-items: center; gap: 8px; font-size: 14px; color: #333333;")}><Dot color={c.status === "active" ? "#15B042" : "#8A4B00"} /><span style={st("overflow: hidden; text-overflow: ellipsis; white-space: nowrap;")}>{c.listing?.name ?? short(c.address)}</span></Link>)}
         </div>
       ) : undefined}
@@ -292,12 +304,163 @@ export default function Merchant() {
     const sampleSome = shown.some((c) => c.listing?.isSample);
     const l0 = shown.find((c) => c.listing);
 
+    const salesBlock = (limit: number, withTabs: boolean) => {
+      const rs = withTabs ? rows : sales.items;
+      return (
+              <section aria-labelledby="s-h" style={st("flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 12px;")}>
+                <div style={st("display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;")}>
+                  <h2 id="s-h" style={st(H2)}>{withTabs ? "Sales" : "Recent sales"}</h2>
+                  {withTabs && <div role="tablist" aria-label="Filter sales" style={st("display: flex; gap: 0; border-bottom: 1px solid #EBEBEB;")}>
+                    {([["all", "All"], ["open", "Held"], ["settled", "Settled"], ["refunded", "Refunded"]] as [Tab, string][]).map(([id, label]) => {
+                      const on = tab === id;
+                      return <button key={id} type="button" role="tab" aria-selected={on} onClick={() => setTab(id)} style={st("height: 32px; padding: 0 12px; border: 0; background: transparent; cursor: pointer; font: 500 13px Inter, sans-serif; margin-bottom: -1px; border-bottom: 2px solid " + (on ? "#111111" : "transparent") + "; color: " + (on ? "#111111" : "#6B6B6B") + ";")}>{label} <span className="tn" style={st("color: #6B6B6B; font-weight: 400;")}>{counts[id]}</span></button>;
+                    })}
+                  </div>}
+                </div>
+                <div style={st("border: 1px solid #EBEBEB; border-radius: 12px; overflow-x: auto;")}>
+                  {sales.loading ? <p role="status" style={st("padding: 24px; font-size: 13px; color: #6B6B6B;")}>Loading sales…</p> : sales.error ? <p role="alert" style={st("padding: 24px; font-size: 13px; color: #B42318;")}>Couldn’t load sales.</p> : rs.length > 0 ? (
+                    <table style={st("width: 100%; min-width: 760px; border-collapse: collapse; font-size: 14px;")}>
+                      <thead><tr style={st("height: 40px; text-align: left;")}>
+                        {[["Sale", "padding: 0 12px 0 16px;"], ["Service", "padding: 0 12px;"], ["Distributor", "padding: 0 12px;"], ["Status", "padding: 0 12px;"], ["Paid", "padding: 0 12px; text-align: right;"], ["Commission", "padding: 0 12px; text-align: right;"], ["", "padding: 0 16px 0 12px; width: 112px;"]].map(([h, s], i) => <th key={i} scope="col" style={st("font-size: 12px; font-weight: 500; color: #6B6B6B; border-bottom: 1px solid #EBEBEB; " + s)}>{h || <span className="vh">Actions</span>}</th>)}
+                      </tr></thead>
+                      <tbody>
+                        {rs.slice(0, limit).map((r) => {
+                          const left = r.status === "open" && r.holdUntil ? (new Date(r.holdUntil).getTime() - now) / 1000 : 0;
+                          return (
+                            <tr key={r.sale} className="rh" style={st("height: 44px;")}>
+                              <td style={st("padding: 0 12px 0 16px; border-bottom: 1px solid #EBEBEB; white-space: nowrap;")}><Link className="mono" to={`/r/${r.sale}`} style={st("font-size: 12px;")}>{short(r.sale)}</Link><span className="tn" style={st("font-size: 12px; color: #6B6B6B; margin-left: 8px;")}>{dayTime(r.settledAt ?? r.openedAt)}</span></td>
+                              <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; color: #111111; white-space: nowrap;")}>{nameOf(r.campaign)}</td>
+                              <td className="mono" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; font-size: 12px; color: #333333; white-space: nowrap;")}>{short(r.parties.distributor)}</td>
+                              <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB;")}><SaleBadge status={r.status} text={r.status === "open" ? openText(r, left) : undefined} /></td>
+                              <td className="tn" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right; color: #111111;")}>{fmtAmount(r.status === "open" ? r.vaultAmount : r.gross, r.decimals)}</td>
+                              <td className="tn" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right; color: #111111;")}>{r.status === "refunded" ? "—" : fmtAmount(r.split.distributor, r.decimals)}</td>
+                              <td style={st("padding: 0 16px 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right;")}>
+                                {r.status === "open" && r.funded && <button className="press bs ra" type="button" onClick={() => setConfirm(r)} style={st("opacity: 0; height: 24px; padding: 0 8px; border: 1px solid #D4D4D8; background: #FFFFFF; border-radius: 6px; font: 500 12px Inter, sans-serif; color: #111111; cursor: pointer; transition: opacity 150ms;")}>Refund sale</button>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="fadein" style={st("padding: 56px 24px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px;")}>
+                      <div style={st("width: 40px; height: 40px; border-radius: 12px; background: #F4F4F5; display: flex; align-items: center; justify-content: center;")}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#333333" strokeWidth="1.5" aria-hidden="true"><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 0 10h-3" /></svg></div>
+                      <h3 style={st("font-size: 16px; font-weight: 500; color: #111111;")}>{tab === "refunded" ? "No refunds" : "No sales"}</h3>
+                      <p style={st("font-size: 14px; color: #6B6B6B; max-width: 360px;")}>{tab === "refunded" ? "You haven’t refunded a sale. Refunds are only possible while a sale is held, before it settles." : "Nothing in this view yet."}</p>
+                    </div>
+                  )}
+                </div>
+                <div style={st("display: flex; align-items: center; justify-content: space-between; gap: 12px;")}>
+                  <span className="tn" style={st("font-size: 12px; color: #6B6B6B;")}>{rs.length ? `1–${Math.min(limit, rs.length)} of ${rs.length} sales` : ""}</span>
+                  {withTabs && rs.length > limit && <button className="press bs" type="button" onClick={() => setSalesLimit((n) => n + 25)} style={st("height: 28px; padding: 0 12px; border: 1px solid #D4D4D8; background: #FFFFFF; border-radius: 8px; font: 500 12px Inter, sans-serif; color: #111111; cursor: pointer;")}>Show more</button>}
+                  {!withTabs && sales.items.length > limit && <Link to={`/app/merchant/sales${keep}`} style={st("font-size: 13px; font-weight: 500;")}>All sales →</Link>}
+                </div>
+              </section>
+      );
+    };
+
+    const th = (h: string, right = false) => <th key={h} scope="col" style={st("padding: 0 12px; font-size: 12px; font-weight: 500; color: #6B6B6B; border-bottom: 1px solid #EBEBEB; white-space: nowrap; " + (right ? "text-align: right;" : "text-align: left;"))}>{h}</th>;
+    const td = (c: React.ReactNode, o: { right?: boolean; mono?: boolean; strong?: boolean } = {}) => <td className={o.mono ? "mono tn" : "tn"} style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; white-space: nowrap; " + (o.right ? "text-align: right; " : "") + (o.mono ? "font-size: 12px; color: #333333;" : "color: #111111;") + (o.strong ? " font-weight: 500;" : ""))}>{c}</td>;
+    const tableWrap = (min: number, head: React.ReactNode, body: React.ReactNode) => <div style={st("border: 1px solid #EBEBEB; border-radius: 12px; overflow-x: auto;")}><table style={{ ...st("width: 100%; border-collapse: collapse; font-size: 14px;"), minWidth: min }}><thead><tr style={st("height: 40px;")}>{head}</tr></thead><tbody>{body}</tbody></table></div>;
+    const note = (t: React.ReactNode) => <p style={st("font-size: 12px; line-height: 18px; color: #6B6B6B; max-width: 720px;")}>{t}</p>;
+    const truncated = sales.items.length >= 100 * Math.max(1, shown.length) || mine.length > MAX_CAMPAIGNS;
+
+    const campaignsView = (
+      <>
+        {tableWrap(900, <>{th("Campaign")}{th("Status")}{th("Commission", true)}{th("Fee", true)}{th("Hold", true)}{th("Budget left (cap)")}{th("Settled", true)}{th("Open", true)}{th("Refunded", true)}</>,
+          mine.map((c) => {
+            const tot = BigInt(c.budget.total), pctLeft = tot > 0n ? Number((BigInt(c.budget.remaining) * 1000n) / tot) / 10 : 0;
+            return (
+              <tr key={c.address} className="rh" style={st("height: 52px;")}>
+                <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; white-space: nowrap;")}><Link to={`/campaigns/${c.address}`} style={st("color: #111111; font-weight: 500;")}>{c.listing?.name ?? "Unlisted campaign"}</Link>{c.listing?.isSample && <SampleBadge style={{ marginLeft: 6 }} />} <span className="mono" style={st("font-size: 12px; color: #6B6B6B; margin-left: 6px;")}>{short(c.address)}</span></td>
+                {td(<span style={st("height: 20px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; " + (c.status === "active" ? "background: #CAFACE; color: #0E7A2F;" : "background: #FFF1D6; color: #8A4B00;"))}>{c.status === "active" ? "Active" : "Budget spent"}</span>)}
+                {td(`${(c.commissionBps / 100).toFixed(c.commissionBps % 100 ? 2 : 0)}%`, { right: true })}
+                {td(<>{(c.feeBps / 100).toFixed(c.feeBps % 100 ? 2 : 0)}%{c.feeEnforced === false ? <span style={st("color: #6B6B6B;")}> legacy</span> : null}</>, { right: true })}
+                {td(`${c.holdSecs} s`, { right: true })}
+                <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB;")}><div style={st("display: flex; align-items: center; gap: 10px;")}><div aria-hidden="true" style={st("width: 80px; height: 4px; background: #F4F4F5; border-radius: 9999px; overflow: hidden;")}><div style={{ width: `${pctLeft}%`, height: "100%", background: "#0F766E" }} /></div><span className="tn" style={st("font-size: 13px; color: #333333;")}>{fmt2(c.budget.remaining)} / {fmt2(c.budget.total)}</span></div></td>
+                {td(c.sales.settled, { right: true })}{td(c.sales.open, { right: true })}{td(c.sales.refunded, { right: true })}
+              </tr>
+            );
+          }))}
+        {mine.some((c) => !c.listing) && note("Unlisted campaigns exist on-chain but have no merchant-signed listing, so they are not shown in the public directory.")}
+        {mine.some((c) => c.feeEnforced === false) && note("“Legacy” campaigns were created before the protocol fee was enforced by the program, so their fee was chosen by their creator. New campaigns always use the program’s fee.")}
+      </>
+    );
+
+    const receiptsView = (() => {
+      const done = sales.items.filter((x) => x.status !== "open");
+      return (
+        <>
+          {done.length === 0 ? <p style={st("font-size: 14px; color: #6B6B6B;")}>No settled or refunded sales yet. Held sales appear here once they settle.</p> : tableWrap(900, <>{th("Receipt")}{th("Campaign")}{th("Distributor")}{th("Status")}{th("Paid", true)}{th("You kept", true)}{th("Commission", true)}{th("Fee", true)}</>,
+            done.slice(0, 50).map((r) => (
+              <tr key={r.sale} className="rh" style={st("height: 44px;")}>
+                <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; white-space: nowrap;")}><Link className="mono" to={`/r/${r.sale}`} style={st("font-size: 12px;")}>{short(r.sale)}</Link><span className="tn" style={st("font-size: 12px; color: #6B6B6B; margin-left: 8px;")}>{dayTime(r.settledAt ?? r.openedAt)}</span></td>
+                {td(nameOf(r.campaign))}{td(short(r.parties.distributor), { mono: true })}
+                <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB;")}><SaleBadge status={r.status} /></td>
+                {td(fmtAmount(r.gross, r.decimals), { right: true })}
+                {td(r.status === "refunded" ? "—" : fmtAmount(r.split.merchant, r.decimals), { right: true })}
+                {td(r.status === "refunded" ? "—" : fmtAmount(r.split.distributor, r.decimals), { right: true })}
+                {td(r.status === "refunded" ? "—" : fmtAmount(r.split.protocolFee, r.decimals), { right: true })}
+              </tr>
+            )))}
+          {done.length > 50 && note(`Showing the 50 newest of ${done.length}.`)}
+          {truncated && note("Based on the latest 100 sales per campaign.")}
+        </>
+      );
+    })();
+
+    const budgetView = (
+      <>
+        {tableWrap(860, <>{th("Campaign")}{th("Cap", true)}{th("Paid out", true)}{th("Left", true)}{th("Used")}{th("Avg commission / sale", true)}{th("Sales it can still cover (estimate)", true)}</>,
+          mine.map((c) => {
+            const tot = BigInt(c.budget.total), spent = BigInt(c.budget.spent), left = BigInt(c.budget.remaining);
+            const usedPct = tot > 0n ? Number((spent * 1000n) / tot) / 10 : 0;
+            const avg = c.sales.settled > 0 ? spent / BigInt(c.sales.settled) : 0n;
+            return (
+              <tr key={c.address} className="rh" style={st("height: 52px;")}>
+                <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; white-space: nowrap;")}><Link to={`/campaigns/${c.address}`} style={st("color: #111111; font-weight: 500;")}>{c.listing?.name ?? short(c.address)}</Link></td>
+                {td(fmt2(tot), { right: true })}{td(fmtShort(spent), { right: true })}{td(fmt2(left), { right: true, strong: true })}
+                <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB;")}><div style={st("display: flex; align-items: center; gap: 10px;")}><div aria-hidden="true" style={st("width: 80px; height: 4px; background: #F4F4F5; border-radius: 9999px; overflow: hidden;")}><div style={{ width: `${usedPct}%`, height: "100%", background: usedPct > 85 ? "#8A4B00" : "#111111" }} /></div><span className="tn" style={st("font-size: 13px; color: #333333;")}>{usedPct.toFixed(1)}%</span></div></td>
+                {td(avg > 0n ? fmtAmount(avg) : "—", { right: true })}
+                {td(avg > 0n ? Math.floor(Number(left) / Number(avg)).toLocaleString("en-US") : "—", { right: true })}
+              </tr>
+            );
+          }))}
+        {note("The commission budget is a cap on what you can pay distributors in commission, not money held by Noux. When it runs out, buyers still pay and you keep the rest; you just stop paying commission. There is no top-up yet: the cap is set when the campaign is created. The estimate divides what is left by the average commission paid so far.")}
+      </>
+    );
+
+    const distributorsView = (() => {
+      const by = new Map<string, { camps: Set<string>; settled: number; refunded: number; open: number; earned: bigint; volume: bigint }>();
+      sales.items.forEach((x) => {
+        const d = by.get(x.parties.distributor) ?? { camps: new Set<string>(), settled: 0, refunded: 0, open: 0, earned: 0n, volume: 0n };
+        d.camps.add(x.campaign);
+        if (x.status === "settled") { d.settled++; d.earned += BigInt(x.split.distributor); d.volume += BigInt(x.gross); } else if (x.status === "refunded") d.refunded++; else d.open++;
+        by.set(x.parties.distributor, d);
+      });
+      const rowsD = [...by.entries()].sort((a, b) => (b[1].earned > a[1].earned ? 1 : b[1].earned < a[1].earned ? -1 : b[1].settled - a[1].settled));
+      return (
+        <>
+          {rowsD.length === 0 ? <p style={st("font-size: 14px; color: #6B6B6B;")}>No distributor has a sale on your campaigns yet.</p> : tableWrap(820, <>{th("Distributor")}{th("Campaigns", true)}{th("Settled", true)}{th("Open", true)}{th("Refunded", true)}{th("Volume", true)}{th("Commission earned", true)}{th("Share of commission", true)}</>,
+            rowsD.map(([a, d]) => (
+              <tr key={a} className="rh" style={st("height: 44px;")}>
+                <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; white-space: nowrap;")}><Link className="mono" to={`/app/earnings?wallet=${a}`} style={st("font-size: 12px;")}>{short(a)}</Link></td>
+                {td(d.camps.size, { right: true })}{td(d.settled, { right: true })}{td(d.open, { right: true })}{td(d.refunded, { right: true })}
+                {td(fmt2(d.volume), { right: true })}{td(fmtAmount(d.earned), { right: true, strong: true })}
+                {td(comm > 0n ? `${Number((d.earned * 1000n) / comm) / 10}%` : "—", { right: true })}
+              </tr>
+            )))}
+          {note("Distributors are identified by wallet address only. Numbers come from public receipts; refunded sales earned them nothing." + (truncated ? " Based on the latest 100 sales per campaign." : ""))}
+        </>
+      );
+    })();
+
     return (
       <>
         <div style={st("display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between;")}>
           <div style={st("display: flex; flex-direction: column; gap: 4px;")}>
-            <h1 style={st("font-size: 20px; line-height: 26px; letter-spacing: -0.015em; font-weight: 500; color: #111111;")}>Overview</h1>
-            <p style={st("font-size: 14px; color: #6B6B6B;")}>Sales across {mine.length === 0 ? "your campaigns" : `your ${mine.length} campaign${mine.length === 1 ? "" : "s"}`}{mine.length > MAX_CAMPAIGNS ? ` (showing the ${MAX_CAMPAIGNS} newest)` : ""}.</p>
+            <h1 style={st("font-size: 20px; line-height: 26px; letter-spacing: -0.015em; font-weight: 500; color: #111111;")}>{SECTION_TITLE[section][0]}</h1>
+            <p style={st("font-size: 14px; color: #6B6B6B;")}>{section !== "overview" ? SECTION_TITLE[section][1] : `Sales across ${mine.length === 0 ? "your campaigns" : `your ${mine.length} campaign${mine.length === 1 ? "" : "s"}`}${mine.length > MAX_CAMPAIGNS ? ` (showing the ${MAX_CAMPAIGNS} newest)` : ""}.`}</p>
           </div>
           <button className="press bp" type="button" onClick={() => setCreating(true)} style={st("height: 32px; padding: 0 12px; border: 0; border-radius: 10px; background: #0F766E; color: #FFFFFF; font: 500 13px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;")}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>Create campaign</button>
         </div>
@@ -315,7 +478,7 @@ export default function Merchant() {
             <h2 style={st("font-size: 16px; font-weight: 500; color: #111111;")}>No campaigns for this wallet</h2>
             <p style={st("font-size: 14px; color: #6B6B6B; max-width: 380px;")}>The index has no campaign created by <span className="mono">{short(wallet)}</span>. It may be brand new (the index runs about every 20 s).</p>
           </div>
-        ) : (
+        ) : section === "overview" ? (
           <>
             <section aria-label="Key numbers" style={st("display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 12px;")}>
               {[
@@ -344,51 +507,7 @@ export default function Merchant() {
             )}
 
             <div style={st("display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start;")}>
-              <section aria-labelledby="s-h" style={st("flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 12px;")}>
-                <div style={st("display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;")}>
-                  <h2 id="s-h" style={st(H2)}>Sales</h2>
-                  <div role="tablist" aria-label="Filter sales" style={st("display: flex; gap: 0; border-bottom: 1px solid #EBEBEB;")}>
-                    {([["all", "All"], ["open", "Held"], ["settled", "Settled"], ["refunded", "Refunded"]] as [Tab, string][]).map(([id, label]) => {
-                      const on = tab === id;
-                      return <button key={id} type="button" role="tab" aria-selected={on} onClick={() => setTab(id)} style={st("height: 32px; padding: 0 12px; border: 0; background: transparent; cursor: pointer; font: 500 13px Inter, sans-serif; margin-bottom: -1px; border-bottom: 2px solid " + (on ? "#111111" : "transparent") + "; color: " + (on ? "#111111" : "#6B6B6B") + ";")}>{label} <span className="tn" style={st("color: #6B6B6B; font-weight: 400;")}>{counts[id]}</span></button>;
-                    })}
-                  </div>
-                </div>
-                <div style={st("border: 1px solid #EBEBEB; border-radius: 12px; overflow-x: auto;")}>
-                  {sales.loading ? <p role="status" style={st("padding: 24px; font-size: 13px; color: #6B6B6B;")}>Loading sales…</p> : sales.error ? <p role="alert" style={st("padding: 24px; font-size: 13px; color: #B42318;")}>Couldn’t load sales.</p> : rows.length > 0 ? (
-                    <table style={st("width: 100%; min-width: 760px; border-collapse: collapse; font-size: 14px;")}>
-                      <thead><tr style={st("height: 40px; text-align: left;")}>
-                        {[["Sale", "padding: 0 12px 0 16px;"], ["Service", "padding: 0 12px;"], ["Distributor", "padding: 0 12px;"], ["Status", "padding: 0 12px;"], ["Paid", "padding: 0 12px; text-align: right;"], ["Commission", "padding: 0 12px; text-align: right;"], ["", "padding: 0 16px 0 12px; width: 112px;"]].map(([h, s], i) => <th key={i} scope="col" style={st("font-size: 12px; font-weight: 500; color: #6B6B6B; border-bottom: 1px solid #EBEBEB; " + s)}>{h || <span className="vh">Actions</span>}</th>)}
-                      </tr></thead>
-                      <tbody>
-                        {rows.slice(0, 25).map((r) => {
-                          const left = r.status === "open" && r.holdUntil ? (new Date(r.holdUntil).getTime() - now) / 1000 : 0;
-                          return (
-                            <tr key={r.sale} className="rh" style={st("height: 44px;")}>
-                              <td style={st("padding: 0 12px 0 16px; border-bottom: 1px solid #EBEBEB; white-space: nowrap;")}><Link className="mono" to={`/r/${r.sale}`} style={st("font-size: 12px;")}>{short(r.sale)}</Link><span className="tn" style={st("font-size: 12px; color: #6B6B6B; margin-left: 8px;")}>{dayTime(r.settledAt ?? r.openedAt)}</span></td>
-                              <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; color: #111111; white-space: nowrap;")}>{nameOf(r.campaign)}</td>
-                              <td className="mono" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; font-size: 12px; color: #333333; white-space: nowrap;")}>{short(r.parties.distributor)}</td>
-                              <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB;")}><SaleBadge status={r.status} text={r.status === "open" ? openText(r, left) : undefined} /></td>
-                              <td className="tn" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right; color: #111111;")}>{fmtAmount(r.status === "open" ? r.vaultAmount : r.gross, r.decimals)}</td>
-                              <td className="tn" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right; color: #111111;")}>{r.status === "refunded" ? "—" : fmtAmount(r.split.distributor, r.decimals)}</td>
-                              <td style={st("padding: 0 16px 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right;")}>
-                                {r.status === "open" && r.funded && <button className="press bs ra" type="button" onClick={() => setConfirm(r)} style={st("opacity: 0; height: 24px; padding: 0 8px; border: 1px solid #D4D4D8; background: #FFFFFF; border-radius: 6px; font: 500 12px Inter, sans-serif; color: #111111; cursor: pointer; transition: opacity 150ms;")}>Refund sale</button>}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <div className="fadein" style={st("padding: 56px 24px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px;")}>
-                      <div style={st("width: 40px; height: 40px; border-radius: 12px; background: #F4F4F5; display: flex; align-items: center; justify-content: center;")}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#333333" strokeWidth="1.5" aria-hidden="true"><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 0 10h-3" /></svg></div>
-                      <h3 style={st("font-size: 16px; font-weight: 500; color: #111111;")}>{tab === "refunded" ? "No refunds" : "No sales"}</h3>
-                      <p style={st("font-size: 14px; color: #6B6B6B; max-width: 360px;")}>{tab === "refunded" ? "You haven’t refunded a sale. Refunds are only possible while a sale is held, before it settles." : "Nothing in this view yet."}</p>
-                    </div>
-                  )}
-                </div>
-                <span className="tn" style={st("font-size: 12px; color: #6B6B6B;")}>{rows.length ? `1–${Math.min(25, rows.length)} of ${rows.length} sales` : ""}</span>
-              </section>
+              {salesBlock(6, false)}
 
               <aside style={st("flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 12px;")}>
                 <section aria-labelledby="i-h" style={st("border: 1px solid #EBEBEB; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px;")}>
@@ -408,7 +527,11 @@ export default function Merchant() {
               </aside>
             </div>
           </>
-        )}
+        ) : section === "campaigns" ? campaignsView
+          : section === "sales" ? salesBlock(salesLimit, true)
+          : section === "receipts" ? receiptsView
+          : section === "budget" ? budgetView
+          : distributorsView}
       </>
     );
   })();
@@ -419,7 +542,7 @@ export default function Merchant() {
       <div style={st("flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column;")}>
         <header style={st("height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 clamp(16px, 3vw, 32px); border-bottom: 1px solid #EBEBEB;")}>
           <NavMenu />
-          <nav aria-label="Breadcrumb" style={st("font-size: 13px; color: #6B6B6B; display: flex; gap: 8px;")}><Link to="/" style={st("color: #6B6B6B;")}>Noux</Link><span aria-hidden="true">/</span><span style={st("color: #111111;")}>Merchant overview</span></nav>
+          <nav aria-label="Breadcrumb" style={st("font-size: 13px; color: #6B6B6B; display: flex; gap: 8px;")}><Link to="/" style={st("color: #6B6B6B;")}>Noux</Link><span aria-hidden="true">/</span><span style={st("color: #111111;")}>Merchant · {SECTION_TITLE[section][0]}</span></nav>
           <span style={{ flex: 1 }} />
           <Freshness ageSeconds={fresh.info?.ageSeconds} fetchedAt={fresh.fetchedAt} now={fresh.now} error={fresh.error} />
           <WalletButton compact />
