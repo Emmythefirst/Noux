@@ -71,3 +71,6 @@ Try it end to end with the scripted buyer agent: `pnpm demo-buy`.
   usage dashboard; tune `INDEXER_INTERVAL_SECONDS` / `KEEPER_TICK_SECONDS`, or set `ENABLE_INDEXER=0`.
 - Render's 750 free hours/month are shared by the whole workspace. A service that is kept awake 24/7 uses ~744 h, so two
   always-awake free services will exhaust the month. Keep pings for the judging window only, or pay for one service.
+
+## Website (apps/web) on Vercel
+Static Vite site; no secrets. Import the GitHub repo in Vercel, Root Directory `apps/web`, add env `ENABLE_EXPERIMENTAL_COREPACK=1`. `apps/web/vercel.json` holds the install/build commands and the single-page-app rewrite. Optional env: `VITE_API_URL` (defaults to the live API), `VITE_RPC_URL` (defaults to the public devnet node; never put a keyed RPC URL here, it is shipped to every browser).
