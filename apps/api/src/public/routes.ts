@@ -65,6 +65,8 @@ export function publicRoutes(d: PublicDeps) {
       sale: r.address, campaign: r.campaign, status: r.status, cluster: d.cluster, decimals: d.decimals,
       parties: { merchant: r.merchant, distributor: r.distributor, buyer: r.buyer, feeOwner: r.fee_owner },
       price: String(r.price), gross: String(r.gross),
+      // For an OPEN sale `gross` is 0 until settlement: `vaultAmount` is what the buyer has paid into the vault so far, `funded` says whether anything has been.
+      vaultAmount: String(r.vault_amount ?? 0), funded: r.status === "open" ? BigInt(String(r.vault_amount ?? 0).split(".")[0]) > 0n : BigInt(String(r.gross).split(".")[0]) > 0n,
       split: { merchant: String(r.merchant_amount), distributor: String(r.commission_amount), protocolFee: String(r.fee_amount) },
       policy: {
         commissionBps: r.commission_bps, feeBps: r.fee_bps, holdSecs: r.hold_secs, rounding: "amounts are floored; the remainder goes to the merchant",
@@ -172,7 +174,7 @@ export function publicRoutes(d: PublicDeps) {
     const recent = (await d.pool.query(`SELECT ${RJ} ${RFROM} WHERE s.distributor = $1 ORDER BY COALESCE(s.settled_at, s.opened_at) DESC LIMIT 20`, [a])).rows;
     // claims issued (off-chain, server-side record) vs sales that reached a payment (vault funded: settled, refunded or still held)
     const issued = (await d.pool.query(`SELECT count(*)::int n FROM claim_issuance WHERE distributor = $1`, [a])).rows[0].n;
-    const paid = (await d.pool.query(`SELECT count(*)::int n FROM idx_sales WHERE distributor = $1 AND gross > 0`, [a])).rows[0].n;
+    const paid = (await d.pool.query(`SELECT count(*)::int n FROM idx_sales WHERE distributor = $1 AND (gross > 0 OR vault_amount > 0)`, [a])).rows[0].n;
     cache(c);
     return c.json({
       distributor: a, decimals: d.decimals, disclosure: DISCLOSURE,

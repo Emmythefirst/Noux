@@ -1,4 +1,4 @@
-import { StrictMode, useEffect } from "react";
+import { StrictMode, Suspense, lazy, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Link, Route, Routes, useLocation } from "react-router-dom";
 import "./styles.css";
@@ -7,10 +7,11 @@ import Directory from "./pages/Directory";
 import CampaignPage from "./pages/Campaign";
 import ReceiptPage, { LatestReceipt } from "./pages/ReceiptPage";
 import Docs from "./pages/Docs";
-import Merchant from "./pages/Merchant";
+const Merchant = lazy(() => import("./pages/Merchant")); // pulls in the Solana library; keep it off the other pages
 import Distributor from "./pages/Distributor";
 import { Page, TopNav } from "./components/common";
 import { st } from "./lib/css";
+import { WalletProvider } from "./lib/wallet-connect";
 
 const TITLES: [RegExp, string][] = [
   [/^\/campaigns\/.+/, "Campaign · Noux"], [/^\/campaigns/, "Campaigns · Noux"], [/^\/r\//, "Receipt · Noux"], [/^\/receipts/, "Receipts · Noux"],
@@ -41,6 +42,7 @@ function NotFound() {
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
+      <WalletProvider>
       <Chrome>
         <Routes>
           <Route path="/" element={<Landing />} />
@@ -50,11 +52,12 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/r/:sale" element={<ReceiptPage />} />
           <Route path="/docs" element={<Docs />} />
           <Route path="/docs/quickstart" element={<Docs />} />
-          <Route path="/app/merchant" element={<Merchant />} />
+          <Route path="/app/merchant" element={<Suspense fallback={null}><Merchant /></Suspense>} />
           <Route path="/app/earnings" element={<Distributor />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Chrome>
+      </WalletProvider>
     </BrowserRouter>
   </StrictMode>,
 );

@@ -15,7 +15,7 @@ const A = kp(), B = kp(); // campaign addresses
 const [d1, d2] = [kp(), kp()], [b1, b2, b3, b4] = [kp(), kp(), kp(), kp()];
 const sale = (over: Partial<SaleRow> & { address: string }): SaleRow => ({
   campaign: A, distributor: d1, buyer: b1, rentPayer: kp(), price: "100000", gross: "100000", merchantAmount: "84000", commissionAmount: "15000", feeAmount: "1000",
-  commissionBps: 1500, feeBps: 100, status: "settled", openedAt: NOW - 500, holdUntil: NOW - 485, expiry: NOW + 600, settledAt: NOW - 400, ...over });
+  commissionBps: 1500, feeBps: 100, status: "settled", openedAt: NOW - 500, holdUntil: NOW - 485, expiry: NOW + 600, settledAt: NOW - 400, vaultAmount: "0", ...over });
 const camp = (over: Partial<CampaignRow> & { address: string }): CampaignRow => ({
   merchant: merchantKey.publicKey.toBase58(), mint, feeOwner, attributionKey: attest, cluster: "devnet", holdSecs: 15, commissionBps: 1500, feeBps: 100,
   commissionBudget: "100000", commissionSpent: "20000", settledCount: "3", refundedCount: "1", ...over });
@@ -210,6 +210,13 @@ describe("public API: distributors and stats", () => {
     // claims issued is the server's own record; paid counts sales whose vault was funded (S5 is open and unfunded)
     for (let i = 0; i < 5; i++) await pool.query(`INSERT INTO claim_issuance (campaign, distributor, buyer, ip, price, nonce, expiry) VALUES ($1,$2,$3,'1.1.1.1',100000,$4,to_timestamp($5))`, [A, d1, b1, `n${i}`, NOW + 600]);
     expect((await get(mkApp(), `/v1/distributors/${d1}`)).body.claims).toEqual({ issued: 5, paid: 3 });
+    // an OPEN sale has gross 0 on-chain until settlement; once its vault holds money it counts as paid and the receipt says funded
+    expect((await get(mkApp(), `/v1/receipts/${S5}`)).body).toMatchObject({ funded: false, vaultAmount: "0", gross: "0" });
+    await pool.query("UPDATE idx_sales SET vault_amount = 100000 WHERE address = $1", [S5]);
+    expect((await get(mkApp(), `/v1/receipts/${S5}`)).body).toMatchObject({ funded: true, vaultAmount: "100000", gross: "0" });
+    expect((await get(mkApp(), `/v1/distributors/${d1}`)).body.claims).toEqual({ issued: 5, paid: 4 });
+    expect((await get(mkApp(), `/v1/receipts/${S1}`)).body.funded).toBe(true);
+    await pool.query("UPDATE idx_sales SET vault_amount = 0 WHERE address = $1", [S5]);
     expect((await get(mkApp(), `/v1/distributors/${d2}`)).body.claims).toEqual({ issued: 0, paid: 2 });
     expect((await get(mkApp(), `/v1/distributors/${d2}`)).body.metrics).toMatchObject({ eligiblePurchases: 1, refunded: 1, totalEarned: "5000" });
     expect((await get(mkApp(), `/v1/distributors/${kp()}`)).body.metrics).toMatchObject({ eligiblePurchases: 0, totalEarned: "0" }); // unknown = empty, not an error
@@ -284,6 +291,12 @@ describe("http hygiene", () => {
     for (let i = 0; i < 3; i++) expect((await app.request("/v1/stats")).status).toBe(200);
     const r = await app.request("/v1/stats"); expect(r.status).toBe(429); expect(r.headers.get("retry-after")).toBe("30");
     expect((await app.request("/v1/claims", { method: "POST", body: "{}" })).status).toBe(400); // reaches the handler (bad body), not the limiter
+  });
+  it("claim-service exposes only the public attribution key and cluster", async () => {
+    const r = await get(mkApp(), "/v1/claim-service");
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ attributionKey: signer.publicKey.toBase58(), cluster: "devnet", claimTtlSecs: 600 });
+    expect(JSON.stringify(r.body)).not.toMatch(/secret|private/i);
   });
   it("healthz stays outside /v1 and exposes no secrets", async () => {
     const r = await mkApp().request("/healthz"); expect(r.status).toBe(200);

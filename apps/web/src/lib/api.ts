@@ -29,6 +29,8 @@ export interface Receipt {
   sale: string; campaign: string; status: "open" | "settled" | "refunded"; cluster: string; decimals: number;
   parties: { merchant: string; distributor: string; buyer: string; feeOwner?: string };
   price: string; gross: string;
+  /** gross is 0 for an open sale until settlement; vaultAmount is what has been paid in so far */
+  vaultAmount: string; funded: boolean;
   split: { merchant: string; distributor: string; protocolFee: string };
   policy: { commissionBps: number; feeBps: number; holdSecs: number; rounding: string; budgetCapApplied: boolean };
   refunded: boolean; openedAt: string | null; settledAt: string | null; holdUntil: string | null;

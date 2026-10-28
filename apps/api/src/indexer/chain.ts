@@ -12,6 +12,8 @@ export interface SaleRow {
   address: string; campaign: string; distributor: string; buyer: string; rentPayer: string; price: string; gross: string;
   merchantAmount: string; commissionAmount: string; feeAmount: string; commissionBps: number; feeBps: number; status: SaleStatus;
   openedAt: number; holdUntil: number; expiry: number; settledAt: number | null;
+  /** Token balance of the per-sale vault, for OPEN sales ("0" otherwise). The Sale account only records `gross` at settlement, so this is the only way to tell a funded sale from an unpaid one. */
+  vaultAmount: string;
 }
 export interface SigInfo { signature: string; blockTime: number | null; failed: boolean }
 export interface Snapshot { slot: number; campaigns: CampaignRow[]; sales: SaleRow[] }
@@ -57,10 +59,20 @@ export class AnchorIndexerChain implements IndexerChain {
         address: pubkey.toBase58(), campaign: x.campaign.toBase58(), distributor: x.distributor.toBase58(), buyer: x.buyer.toBase58(), rentPayer: f(x, "rent_payer", "rentPayer").toBase58(),
         price: s(x.price), gross: s(x.gross), merchantAmount: s(f(x, "merchant_amount", "merchantAmount")), commissionAmount: s(f(x, "commission_amount", "commissionAmount")), feeAmount: s(f(x, "fee_amount", "feeAmount")),
         commissionBps: Number(f(x, "commission_bps", "commissionBps")), feeBps: Number(f(x, "fee_bps", "feeBps")), status,
-        openedAt: Number(s(f(x, "opened_at", "openedAt"))), holdUntil: Number(s(f(x, "hold_until", "holdUntil"))), expiry: Number(s(x.expiry)), settledAt: settledAt > 0 ? settledAt : null,
+        openedAt: Number(s(f(x, "opened_at", "openedAt"))), holdUntil: Number(s(f(x, "hold_until", "holdUntil"))), expiry: Number(s(x.expiry)), settledAt: settledAt > 0 ? settledAt : null, vaultAmount: "0",
       });
     }
+    await this.fillVaultAmounts(sales, new Map(campaigns.map((c) => [c.address, c.mint])));
     return { slot, campaigns, sales };
+  }
+
+  private async fillVaultAmounts(sales: SaleRow[], mintOf: Map<string, string>) {
+    const open = sales.filter((x) => x.status === "open" && mintOf.has(x.campaign));
+    for (let i = 0; i < open.length; i += 100) {
+      const chunk = open.slice(i, i + 100);
+      const infos = await this.conn.getMultipleAccountsInfo(chunk.map((x) => new PublicKey(this.vaultOf(x.address, mintOf.get(x.campaign)!))), "confirmed");
+      chunk.forEach((x, k) => { const d = infos[k]?.data; x.vaultAmount = d && d.length >= 72 ? d.readBigUInt64LE(64).toString() : "0"; }); // SPL token account: amount is the u64 at offset 64
+    }
   }
 
   async signatures(address: string, limit = 20): Promise<SigInfo[]> {

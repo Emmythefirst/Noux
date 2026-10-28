@@ -12,6 +12,7 @@ export const INDEXER_MIGRATIONS = [
      opened_at TIMESTAMPTZ NOT NULL, hold_until TIMESTAMPTZ NOT NULL, expiry TIMESTAMPTZ NOT NULL, settled_at TIMESTAMPTZ,
      open_sig TEXT, payment_sig TEXT, settle_sig TEXT, updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
    )`,
+  `ALTER TABLE idx_sales ADD COLUMN IF NOT EXISTS vault_amount NUMERIC NOT NULL DEFAULT 0`,
   `CREATE INDEX IF NOT EXISTS idx_sales_campaign ON idx_sales (campaign, status)`,
   `CREATE INDEX IF NOT EXISTS idx_sales_distributor ON idx_sales (distributor)`,
   `CREATE INDEX IF NOT EXISTS idx_sales_buyer ON idx_sales (buyer)`,

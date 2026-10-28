@@ -47,16 +47,16 @@ export function WalletForm({ initial, onSubmit, label, example }: { initial: str
         <button className="press bp" type="submit" disabled={!ok} style={{ ...st("height: 40px; padding: 0 16px; border: 0; background: #0F766E; border-radius: 10px; font: 500 14px Inter, sans-serif; color: #FFFFFF; cursor: pointer;"), opacity: ok ? 1 : 0.5 }}>View</button>
       </div>
       {v !== "" && !ok && <span style={st("font-size: 12px; color: #B42318;")}>That doesn’t look like a Solana address.</span>}
-      <p style={st("font-size: 12px; line-height: 18px; color: #6B6B6B;")}>Wallet connection isn’t built yet. This page reads the public on-chain numbers for the address you enter; it can’t sign anything.</p>
+      <p style={st("font-size: 12px; line-height: 18px; color: #6B6B6B;")}>Connect a wallet (top right) to act as that wallet, or paste any address to read its public on-chain numbers. Pasting an address can’t sign anything.</p>
       {example && <button type="button" onClick={() => onSubmit(example.address)} style={st("align-self: flex-start; border: 0; background: none; padding: 0; color: #0F766E; font: 500 13px Inter, sans-serif; cursor: pointer;")}>{example.label} ({short(example.address)}) →</button>}
     </form>
   );
 }
 
-export function ViewingBar({ address, onChange }: { address: string; onChange: () => void }) {
+export function ViewingBar({ address, onChange, connected }: { address: string; onChange: () => void; connected?: string | null }) {
   return (
     <div role="note" style={st("display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border: 1px solid #EBEBEB; border-radius: 10px; background: #FAFAFA; font-size: 13px; color: #333333;")}>
-      <span>Read-only view of <span className="mono" title={address} style={st("font-size: 12px;")}>{short(address)}</span>. Wallet connection isn’t built yet, so nothing here can be signed.</span>
+      <span>Showing the public numbers for <span className="mono" title={address} style={st("font-size: 12px;")}>{short(address)}</span>.{connected === address ? " This is your connected wallet." : connected ? " This isn’t your connected wallet, so you can’t act for it." : " Connect a wallet to act for it."}</span>
       <button type="button" onClick={onChange} style={st("border: 0; background: none; padding: 0; color: #0F766E; font: 500 13px Inter, sans-serif; cursor: pointer;")}>Change address</button>
     </div>
   );

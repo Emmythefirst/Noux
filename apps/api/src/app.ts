@@ -29,6 +29,8 @@ export function createApp(deps: Deps, opts: { trustProxy: boolean; clientIp?: (c
       return next();
     });
     app.route("/v1", publicRoutes(opts.public));
+    // What a new campaign must name as its attribution key for this service to issue claims for it. Public keys only.
+    app.get("/v1/claim-service", (c) => c.json({ attributionKey: deps.signer.publicKey.toBase58(), cluster: deps.cfg.CLUSTER, programId: deps.cfg.PROGRAM_ID, claimTtlSecs: deps.cfg.CLAIM_TTL_SECS }));
   }
   app.get("/healthz", (c) => c.json({ ok: true, attributionKey: deps.signer.publicKey.toBase58(), cluster: deps.cfg.CLUSTER }));
 

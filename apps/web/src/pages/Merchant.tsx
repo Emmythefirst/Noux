@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { st } from "../lib/css";
-import { apiGet, useIndexFreshness, useApi, useNow, type Campaign, type Page as ApiPage, type Receipt } from "../lib/api";
-import { dayTime, fmt2, fmtAmount, fmtShort, mmss, short } from "../lib/format";
+import { API_BASE, apiGet, useIndexFreshness, useApi, useNow, type Campaign, type Page as ApiPage, type Receipt } from "../lib/api";
+import { PublicKey } from "@solana/web3.js";
+import { CATEGORIES, dayTime, fmt2, fmtAmount, fmtShort, mmss, short } from "../lib/format";
+import { campaignPda, createCampaignIx, listingMessage, newTx, parseAmount, refundSaleIx } from "../lib/program";
+import { getBlockhash, useWallet } from "../lib/wallet-connect";
+import { RPC_URL } from "../lib/verify";
+import { WalletButton } from "../components/wallet-ui";
 import { isPubkey, useWalletAddress } from "../lib/wallet";
 import { AppSidebar, ViewingBar, WalletForm } from "../components/appshell";
 import { openText, DevnetBadge, Dot, ErrorState, Freshness, SampleBadge, SaleBadge, WakingBanner } from "../components/common";
@@ -29,46 +34,108 @@ function useMerchantSales(addresses: string[]) {
   return state;
 }
 
-function CreateSheet({ onClose }: { onClose: () => void }) {
+interface ClaimService { attributionKey: string; cluster: string; programId: string; claimTtlSecs: number }
+const FIELD = "height: 40px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 8px; font: 400 14px Inter, sans-serif; color: #111111; background: #FFFFFF; width: 100%;";
+const LABEL = "font-size: 13px; font-weight: 500; color: #333333;";
+
+function CreateSheet({ onClose, onCreated }: { onClose: () => void; onCreated: (campaign: string) => void }) {
+  const w = useWallet();
+  const protocol = useApi<{ protocol: { feeBps: number; maxFeeBps: number } | null }>("/stats");
+  const feeBps = protocol.data?.protocol?.feeBps ?? null;
   const [comm, setComm] = useState(15);
   const [budget, setBudget] = useState("50.00");
   const [hold, setHold] = useState(120);
-  const gross = 100000, fee = Math.floor((gross * FEE_BPS) / 10000), c = Math.floor((gross * comm * 100) / 10000), m = gross - fee - c;
-  const b = parseFloat(budget.replace(/,/g, "")) || 0;
-  const covers = c > 0 ? Math.floor(b / (c / 1e6)) : 0;
+  const [name, setName] = useState(""), [desc, setDesc] = useState(""), [cat, setCat] = useState("data-feeds"), [url, setUrl] = useState(""), [route, setRoute] = useState("GET /"), [price, setPrice] = useState("$0.10");
+  const [step, setStep] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const gross = 100000, fee = feeBps === null ? 0 : Math.floor((gross * feeBps) / 10000), c = Math.floor((gross * comm * 100) / 10000), m = gross - fee - c;
+  const b = (() => { try { return parseAmount(budget); } catch { return null; } })();
+  const covers = c > 0 && b !== null ? Math.floor(Number(b) / c) : 0;
   const f = (n: number) => fmtAmount(String(n));
-  useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
+  const busy = step !== null;
+  useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && !busy && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose, busy]);
+
+  const problems = (): string | null => {
+    if (!w.address) return "Connect a wallet first.";
+    if (b === null || b <= 0n) return "Enter a commission budget greater than zero (plain number, up to 6 decimals).";
+    if (!name.trim() || name.length > 60) return "Name is required (up to 60 characters).";
+    if (!desc.trim() || desc.length > 280) return "Description is required (up to 280 characters).";
+    if (!/^https:\/\/[^\s/$.?#].[^\s]*$/.test(url) || url.length > 200) return "Endpoint URL must be a public https address.";
+    if (!route.trim() || route.length > 80) return "Route is required, for example GET /report.";
+    if (!price.trim() || price.length > 20) return "Display price is required, for example $0.10.";
+    if (feeBps === null) return "Couldn’t read the protocol fee. Try again in a moment.";
+    return null;
+  };
+
+  const submit = async () => {
+    const p = problems(); if (p) { setErr(p); return; }
+    setErr(null);
+    try {
+      setStep("Preparing…");
+      const svc = await apiGet<ClaimService>("/claim-service");
+      const merchant = new PublicKey(w.address!);
+      const id = BigInt("0x" + Array.from(crypto.getRandomValues(new Uint8Array(6)), (x) => x.toString(16).padStart(2, "0")).join(""));
+      const tx = newTx(createCampaignIx({ merchant, campaignId: id, commissionBps: comm * 100, budget: b!, attributionKey: new PublicKey(svc.attributionKey), cluster: svc.cluster, holdSecs: hold }), merchant, await getBlockhash());
+      setStep("Approve the transaction in your wallet…");
+      await w.signAndSend(tx);
+      const campaign = campaignPda(merchant, id).toBase58();
+      const listing = { name: name.trim(), description: desc.trim(), category: cat, endpointUrl: url.trim(), route: route.trim(), displayPrice: price.trim(), isSample: false };
+      setStep("Sign the listing message in your wallet…");
+      const ts = Math.floor(Date.now() / 1000);
+      const sig = await w.signMessage(await listingMessage(campaign, listing, ts));
+      setStep("Publishing the listing…");
+      let last = "";
+      for (let i = 0; i < 6; i++) { // the index reads the new campaign from the chain; give it a few seconds
+        const r = await fetch(`${API_BASE}/campaigns/${campaign}/listing`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ listing, ts, signature: btoa(String.fromCharCode(...sig)) }) });
+        if (r.ok) { onCreated(campaign); return; }
+        last = ((await r.json().catch(() => null)) as any)?.error?.message ?? `HTTP ${r.status}`;
+        if (r.status !== 404) break;
+        await new Promise((res) => setTimeout(res, 2000));
+      }
+      throw new Error(`The campaign was created on-chain (${short(campaign)}), but publishing the listing failed: ${last}`);
+    } catch (e) { setErr((e as Error).message); setStep(null); }
+  };
+
   return (
     <>
-      <div className="scrim" onClick={onClose} style={st("position: fixed; inset: 0; z-index: 50; background: rgb(0 0 0 / .4);")} />
+      <div className="scrim" onClick={() => !busy && onClose()} style={st("position: fixed; inset: 0; z-index: 50; background: rgb(0 0 0 / .4);")} />
       <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="cc-h" style={st("position: fixed; top: 8px; right: 8px; bottom: 8px; z-index: 51; width: min(520px, calc(100% - 16px)); background: #FFFFFF; border-radius: 16px; box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 24px 48px -12px rgb(0 0 0 / .18); display: flex; flex-direction: column; overflow: hidden;")}>
         <div style={st("padding: 20px 24px; display: flex; align-items: flex-start; gap: 12px; border-bottom: 1px solid #EBEBEB;")}>
           <div style={st("flex: 1; display: flex; flex-direction: column; gap: 4px;")}><h2 id="cc-h" style={st(H2)}>Create campaign</h2><p style={st("font-size: 13px; color: #6B6B6B;")}>Terms are written on-chain. There is no edit instruction yet, so choose carefully.</p></div>
-          <button className="press gh" type="button" onClick={onClose} aria-label="Close" style={st("width: 32px; height: 32px; border: 0; background: transparent; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center;")}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#333333" strokeWidth="1.5" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
+          <button className="press gh" type="button" disabled={busy} onClick={onClose} aria-label="Close" style={st("width: 32px; height: 32px; border: 0; background: transparent; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center;")}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#333333" strokeWidth="1.5" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
         </div>
         <div style={st("flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 20px;")}>
+          <fieldset disabled={busy} style={st("border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 12px;")}>
+            <legend style={st(LABEL + " padding: 0 0 8px;")}>Service</legend>
+            <label style={st("display: flex; flex-direction: column; gap: 6px;")}><span style={st("font-size: 12px; color: #6B6B6B;")}>Name</span><input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} placeholder="Market brief" style={st(FIELD)} /></label>
+            <label style={st("display: flex; flex-direction: column; gap: 6px;")}><span style={st("font-size: 12px; color: #6B6B6B;")}>Description</span><textarea value={desc} maxLength={280} rows={2} onChange={(e) => setDesc(e.target.value)} placeholder="What a buyer gets for one call" style={{ ...st(FIELD), height: 64, padding: 12, resize: "vertical" }} /></label>
+            <label style={st("display: flex; flex-direction: column; gap: 6px;")}><span style={st("font-size: 12px; color: #6B6B6B;")}>Endpoint URL (https)</span><input className="mono" value={url} maxLength={200} onChange={(e) => setUrl(e.target.value)} placeholder="https://api.example.com/report" style={{ ...st(FIELD), fontSize: 12 }} /></label>
+            <div style={st("display: grid; grid-template-columns: 1fr 1fr; gap: 12px;")}>
+              <label style={st("display: flex; flex-direction: column; gap: 6px;")}><span style={st("font-size: 12px; color: #6B6B6B;")}>Route</span><input className="mono" value={route} maxLength={80} onChange={(e) => setRoute(e.target.value)} style={{ ...st(FIELD), fontSize: 12 }} /></label>
+              <label style={st("display: flex; flex-direction: column; gap: 6px;")}><span style={st("font-size: 12px; color: #6B6B6B;")}>Price shown</span><input value={price} maxLength={20} onChange={(e) => setPrice(e.target.value)} style={st(FIELD)} /></label>
+            </div>
+            <label style={st("display: flex; flex-direction: column; gap: 6px;")}><span style={st("font-size: 12px; color: #6B6B6B;")}>Category</span>
+              <select value={cat} onChange={(e) => setCat(e.target.value)} style={st(FIELD)}>{Object.entries(CATEGORIES).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+            </label>
+            <span style={st("font-size: 12px; color: #6B6B6B;")}>The price claims must carry comes from your gateway route, not from this field. This text is what people see in the directory.</span>
+          </fieldset>
           <div style={st("display: flex; flex-direction: column; gap: 8px;")}>
-            <label htmlFor="svc" style={st("font-size: 13px; font-weight: 500; color: #333333;")}>Service</label>
-            <select id="svc" style={st("height: 40px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 8px; font: 400 14px Inter, sans-serif; color: #111111; background: #FFFFFF;")}><option>Market brief · GET /sample/brief · 0.10 USDC</option><option>Price quote · GET /sample/quote · 0.03 USDC</option></select>
-            <span style={st("font-size: 12px; color: #6B6B6B;")}>Price comes from your route. Claims must match it exactly.</span>
-          </div>
-          <div style={st("display: flex; flex-direction: column; gap: 8px;")}>
-            <label htmlFor="cc-comm" style={st("font-size: 13px; font-weight: 500; color: #333333; display: flex; justify-content: space-between;")}><span>Commission</span><span className="tn" style={st("color: #0F766E;")}>{comm}%</span></label>
-            <input id="cc-comm" type="range" min={1} max={50} step={1} value={comm} onChange={(e) => setComm(Number(e.target.value))} style={st("width: 100%; height: 28px;")} />
+            <label htmlFor="cc-comm" style={st(LABEL + " display: flex; justify-content: space-between;")}><span>Commission</span><span className="tn" style={st("color: #0F766E;")}>{comm}%</span></label>
+            <input id="cc-comm" type="range" min={1} max={50} step={1} value={comm} disabled={busy} onChange={(e) => setComm(Number(e.target.value))} style={st("width: 100%; height: 28px;")} />
             <div className="tn" style={st("display: flex; justify-content: space-between; font-size: 12px; color: #6B6B6B;")}><span>1%</span><span>Maximum: 50%</span><span>50%</span></div>
           </div>
           <div style={st("display: flex; flex-direction: column; gap: 8px;")}>
-            <label htmlFor="cc-budget" style={st("font-size: 13px; font-weight: 500; color: #333333;")}>Commission budget (a cap, not escrow)</label>
+            <label htmlFor="cc-budget" style={st(LABEL)}>Commission budget (a cap, not escrow)</label>
             <div style={st("display: flex; align-items: center; gap: 12px; background: #F4F4F5; border-radius: 16px; padding: 14px 14px 14px 18px;")}>
-              <input id="cc-budget" className="tn" type="text" inputMode="decimal" autoComplete="off" value={budget} onChange={(e) => setBudget(e.target.value)} style={st("flex: 1; min-width: 0; border: 0; background: transparent; font: 500 28px Inter, sans-serif; letter-spacing: -0.02em; color: #111111; outline-offset: 4px;")} />
+              <input id="cc-budget" className="tn" type="text" inputMode="decimal" autoComplete="off" value={budget} disabled={busy} onChange={(e) => setBudget(e.target.value)} style={st("flex: 1; min-width: 0; border: 0; background: transparent; font: 500 28px Inter, sans-serif; letter-spacing: -0.02em; color: #111111; outline-offset: 4px;")} />
               <span style={st("height: 32px; padding: 0 12px; border-radius: 9999px; background: #FFFFFF; box-shadow: 0 0 0 1px rgb(0 0 0 / .06); display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: #111111;")}><span aria-hidden="true" style={st("width: 14px; height: 14px; border-radius: 9999px; background: #0058B0;")} />USDC</span>
             </div>
             <div className="tn" style={st("display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: #6B6B6B;")}><span>Nothing is locked: commission is paid from each sale, up to this cap.</span><span style={st("white-space: nowrap;")}>Covers about {covers.toLocaleString("en-US")} sales</span></div>
           </div>
           <div style={st("display: flex; flex-direction: column; gap: 8px;")}>
-            <span id="hold-l" style={st("font-size: 13px; font-weight: 500; color: #333333;")}>Refund hold</span>
+            <span id="hold-l" style={st(LABEL)}>Refund hold</span>
             <div role="radiogroup" aria-labelledby="hold-l" style={st("display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding: 3px; background: #F4F4F5; border-radius: 10px;")}>
-              {[0, 60, 120, 300, 600].map((h) => { const on = hold === h; return <button key={h} type="button" role="radio" aria-checked={on} onClick={() => setHold(h)} style={st("height: 32px; border: 0; border-radius: 8px; cursor: pointer; font: 500 13px Inter, sans-serif; font-variant-numeric: tabular-nums; " + (on ? "background: #FFFFFF; color: #111111; box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 1px 2px rgb(0 0 0 / .06);" : "background: transparent; color: #6B6B6B;"))}>{h} s</button>; })}
+              {[0, 60, 120, 300, 600].map((h) => { const on = hold === h; return <button key={h} type="button" role="radio" aria-checked={on} disabled={busy} onClick={() => setHold(h)} style={st("height: 32px; border: 0; border-radius: 8px; cursor: pointer; font: 500 13px Inter, sans-serif; font-variant-numeric: tabular-nums; " + (on ? "background: #FFFFFF; color: #111111; box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 1px 2px rgb(0 0 0 / .06);" : "background: transparent; color: #6B6B6B;"))}>{h} s</button>; })}
             </div>
             <span style={st("font-size: 12px; color: #6B6B6B;")}>How long you have to refund a failed call before anyone can settle.</span>
           </div>
@@ -82,15 +149,20 @@ function CreateSheet({ onClose }: { onClose: () => void }) {
             <dl className="tn" style={st("margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; font-size: 12px;")}>
               <div><dt style={st("color: #6B6B6B;")}>You keep</dt><dd style={st("margin: 0; font-size: 14px; font-weight: 500; color: #111111;")}>{f(m)}</dd></div>
               <div><dt style={st("color: #6B6B6B;")}>Distributor</dt><dd style={st("margin: 0; font-size: 14px; font-weight: 500; color: #0F766E;")}>{f(c)}</dd></div>
-              <div><dt style={st("color: #6B6B6B;")}>Protocol fee</dt><dd style={st("margin: 0; font-size: 14px; font-weight: 500; color: #111111;")}>{f(fee)}</dd></div>
+              <div><dt style={st("color: #6B6B6B;")}>Protocol fee</dt><dd style={st("margin: 0; font-size: 14px; font-weight: 500; color: #111111;")}>{feeBps === null ? "—" : f(fee)}</dd></div>
             </dl>
+            <span style={st("font-size: 12px; color: #6B6B6B;")}>The protocol fee is {feeBps === null ? "set by the program" : `${(feeBps / 100).toFixed(2)}%, set by the program`} (max 5%). You can’t change it or redirect it.</span>
           </div>
+          {err && <p role="alert" style={st("font-size: 13px; line-height: 18px; color: #B42318;")}>{err}</p>}
+          {busy && <p role="status" style={st("font-size: 13px; color: #333333; display: flex; align-items: center; gap: 8px;")}><svg className="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0F766E" strokeWidth="2" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.56" /></svg>{step}</p>}
         </div>
         <div style={st("padding: 16px 24px; border-top: 1px solid #EBEBEB; display: flex; align-items: center; gap: 12px; justify-content: space-between; flex-wrap: wrap;")}>
-          <span style={st("font-size: 12px; color: #6B6B6B; max-width: 260px;")}>Creating a campaign needs a wallet signature. Wallet connection isn’t built yet, so this is a preview of the terms.</span>
+          <span style={st("font-size: 12px; color: #6B6B6B; max-width: 260px;")}>{w.address ? "You’ll approve one transaction and one listing message in your wallet." : "Connect a wallet to create a campaign."}</span>
           <div style={st("display: flex; gap: 8px;")}>
-            <button className="press bs" type="button" onClick={onClose} style={st("height: 40px; padding: 0 14px; border: 1px solid #D4D4D8; background: #FFFFFF; border-radius: 10px; font: 500 14px Inter, sans-serif; color: #111111; cursor: pointer;")}>Close</button>
-            <button type="button" disabled aria-disabled="true" title="Wallet signing isn’t built yet" style={st("height: 40px; padding: 0 16px; border: 0; background: #0F766E; border-radius: 10px; font: 500 14px Inter, sans-serif; color: #FFFFFF; opacity: .45;")}>Create campaign · {b ? b.toFixed(2) : "0.00"} USDC cap</button>
+            <button className="press bs" type="button" disabled={busy} onClick={onClose} style={st("height: 40px; padding: 0 14px; border: 1px solid #D4D4D8; background: #FFFFFF; border-radius: 10px; font: 500 14px Inter, sans-serif; color: #111111; cursor: pointer;")}>Cancel</button>
+            {w.address
+              ? <button className="press bp" type="button" disabled={busy} onClick={() => void submit()} style={{ ...st("height: 40px; padding: 0 16px; border: 0; background: #0F766E; border-radius: 10px; font: 500 14px Inter, sans-serif; color: #FFFFFF; cursor: pointer;"), opacity: busy ? 0.6 : 1 }}>Create campaign · {b !== null ? fmt2(b) : "0.00"} USDC cap</button>
+              : <WalletButton />}
           </div>
         </div>
       </div>
@@ -98,18 +170,38 @@ function CreateSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-function RefundDialog({ sale, onClose }: { sale: Receipt; onClose: () => void }) {
-  useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
+function RefundDialog({ sale, merchant, onClose, onDone }: { sale: Receipt; merchant: string | null; onClose: () => void; onDone: (r: Receipt) => void }) {
+  const w = useWallet();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && !busy && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose, busy]);
+  const mine = !!w.address && w.address === merchant;
+  const go = async () => {
+    setBusy(true); setErr(null);
+    try {
+      // rent payer is on the sale account on-chain; the API's receipt does not carry it, so read it from the chain here
+      const acc = await fetch(RPC_URL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getAccountInfo", params: [sale.sale, { encoding: "base64", commitment: "confirmed" }] }) }).then((r) => r.json());
+      const data = Uint8Array.from(atob(acc.result.value.data[0]), (c) => c.charCodeAt(0));
+      if (data[244] !== 0) throw new Error("This sale is no longer open, so it can’t be refunded.");
+      const rentPayer = new PublicKey(data.slice(104, 136));
+      const merchantPk = new PublicKey(w.address!);
+      const tx = newTx(refundSaleIx({ merchant: merchantPk, campaign: new PublicKey(sale.campaign), sale: new PublicKey(sale.sale), buyer: new PublicKey(sale.parties.buyer), rentPayer }), merchantPk, await getBlockhash());
+      await w.signAndSend(tx);
+      onDone(sale);
+    } catch (e) { setErr((e as Error).message); setBusy(false); }
+  };
   return (
     <>
-      <div className="scrim" onClick={onClose} style={st("position: fixed; inset: 0; z-index: 50; background: rgb(0 0 0 / .4);")} />
+      <div className="scrim" onClick={() => !busy && onClose()} style={st("position: fixed; inset: 0; z-index: 50; background: rgb(0 0 0 / .4);")} />
       <div className="dialog" role="alertdialog" aria-modal="true" aria-labelledby="rf-h" aria-describedby="rf-d" style={st("position: fixed; z-index: 51; left: 50%; top: 50%; margin-left: max(-240px, -50vw + 8px); margin-top: -110px; width: min(480px, calc(100% - 16px)); background: #FFFFFF; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 24px 48px -12px rgb(0 0 0 / .18);")}>
         <h2 id="rf-h" style={st(H2)}>Refund this sale?</h2>
-        <p id="rf-d" className="tn" style={st("font-size: 14px; line-height: 20px; color: #333333;")}>The buyer gets {fmtAmount(sale.gross, sale.decimals)} USDC back and no commission is paid. This counts toward your public refund rate.</p>
-        <p style={st("font-size: 12px; line-height: 18px; color: #6B6B6B;")}>Refunds are signed by the merchant wallet. Wallet connection isn’t built yet, so this button is disabled.</p>
+        <p id="rf-d" className="tn" style={st("font-size: 14px; line-height: 20px; color: #333333;")}>The buyer gets {fmtAmount(sale.vaultAmount !== "0" ? sale.vaultAmount : sale.gross, sale.decimals)} USDC back and no commission is paid. This counts toward your public refund rate.</p>
+        {!w.address && <p style={st("font-size: 12px; line-height: 18px; color: #6B6B6B;")}>Refunds are signed by the merchant wallet. Connect it to continue.</p>}
+        {w.address && !mine && <p role="alert" style={st("font-size: 12px; line-height: 18px; color: #B42318;")}>The connected wallet ({short(w.address)}) isn’t this campaign’s merchant. Only the merchant wallet can refund.</p>}
+        {err && <p role="alert" style={st("font-size: 13px; color: #B42318;")}>{err}</p>}
         <div style={st("display: flex; gap: 8px; justify-content: flex-end;")}>
-          <button className="press bs" type="button" onClick={onClose} style={st("height: 32px; padding: 0 12px; border: 1px solid #D4D4D8; background: #FFFFFF; border-radius: 10px; font: 500 13px Inter, sans-serif; color: #111111; cursor: pointer;")}>Cancel</button>
-          <button type="button" disabled aria-disabled="true" style={st("height: 32px; padding: 0 12px; border: 0; background: #D92D20; border-radius: 10px; font: 500 13px Inter, sans-serif; color: #FFFFFF; opacity: .45;")}>Refund sale</button>
+          <button className="press bs" type="button" disabled={busy} onClick={onClose} style={st("height: 32px; padding: 0 12px; border: 1px solid #D4D4D8; background: #FFFFFF; border-radius: 10px; font: 500 13px Inter, sans-serif; color: #111111; cursor: pointer;")}>Cancel</button>
+          {!w.address ? <WalletButton /> : <button className="press bd" type="button" disabled={!mine || busy} onClick={() => void go()} style={{ ...st("height: 32px; padding: 0 12px; border: 0; background: #D92D20; border-radius: 10px; font: 500 13px Inter, sans-serif; color: #FFFFFF; cursor: pointer;"), opacity: !mine || busy ? 0.5 : 1 }}>{busy ? "Refunding…" : "Refund sale"}</button>}
         </div>
       </div>
     </>
@@ -119,8 +211,11 @@ function RefundDialog({ sale, onClose }: { sale: Receipt; onClose: () => void })
 export default function Merchant() {
   const [sp, setSp] = useSearchParams();
   const [saved, setSaved] = useWalletAddress();
+  const w = useWallet();
   const q = sp.get("wallet") ?? "";
-  const wallet = isPubkey(q) ? q : "";
+  const wallet = isPubkey(q) ? q : (w.address ?? ""); // a pasted address wins; otherwise the connected wallet
+  const [toast, setToast] = useState<{ text: string; to?: string } | null>(null);
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 8000); return () => clearTimeout(t); }, [toast]);
   const pick = (a: string) => { setSaved(a); setSp({ wallet: a }); };
   const [tab, setTab] = useState<Tab>("all");
   const [creating, setCreating] = useState(false);
@@ -172,7 +267,7 @@ export default function Merchant() {
       <>
         <div style={st("display: flex; flex-direction: column; gap: 4px;")}><h1 style={st("font-size: 20px; line-height: 26px; letter-spacing: -0.015em; font-weight: 500; color: #111111;")}>Overview</h1><p style={st("font-size: 14px; color: #6B6B6B;")}>Sales across your campaigns.</p></div>
         <WalletForm initial={saved} onSubmit={pick} label="Which merchant wallet?" example={{ label: "See the sample merchant", address: SAMPLE_MERCHANT }} />
-        <button className="press bp" type="button" onClick={() => setCreating(true)} style={st("align-self: flex-start; height: 32px; padding: 0 12px; border: 0; border-radius: 10px; background: #0F766E; color: #FFFFFF; font: 500 13px Inter, sans-serif; cursor: pointer;")}>Preview the create-campaign form</button>
+        <button className="press bp" type="button" onClick={() => setCreating(true)} style={st("align-self: flex-start; height: 32px; padding: 0 12px; border: 0; border-radius: 10px; background: #0F766E; color: #FFFFFF; font: 500 13px Inter, sans-serif; cursor: pointer;")}>Create campaign</button>
       </>
     );
     if (list.loading) return list.waking ? <WakingBanner /> : <p role="status" style={st("font-size: 14px; color: #6B6B6B;")}>Loading campaigns…</p>;
@@ -204,7 +299,7 @@ export default function Merchant() {
           </div>
           <button className="press bp" type="button" onClick={() => setCreating(true)} style={st("height: 32px; padding: 0 12px; border: 0; border-radius: 10px; background: #0F766E; color: #FFFFFF; font: 500 13px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;")}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>Create campaign</button>
         </div>
-        <ViewingBar address={wallet} onChange={() => setSp({})} />
+        <ViewingBar address={wallet} onChange={() => setSp({})} connected={w.address} />
 
         {sampleSome && (
           <div role="note" style={st("display: flex; gap: 10px; align-items: center; padding: 10px 14px; border: 1px solid #EBEBEB; border-radius: 10px; background: #FAFAFA; font-size: 13px; color: #333333;")}>
@@ -272,10 +367,10 @@ export default function Merchant() {
                               <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; color: #111111; white-space: nowrap;")}>{nameOf(r.campaign)}</td>
                               <td className="mono" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; font-size: 12px; color: #333333; white-space: nowrap;")}>{short(r.parties.distributor)}</td>
                               <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB;")}><SaleBadge status={r.status} text={r.status === "open" ? openText(r, left) : undefined} /></td>
-                              <td className="tn" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right; color: #111111;")}>{fmtAmount(r.gross, r.decimals)}</td>
+                              <td className="tn" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right; color: #111111;")}>{fmtAmount(r.status === "open" ? r.vaultAmount : r.gross, r.decimals)}</td>
                               <td className="tn" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right; color: #111111;")}>{r.status === "refunded" ? "—" : fmtAmount(r.split.distributor, r.decimals)}</td>
                               <td style={st("padding: 0 16px 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right;")}>
-                                {r.status === "open" && <button className="press bs ra" type="button" onClick={() => setConfirm(r)} style={st("opacity: 0; height: 24px; padding: 0 8px; border: 1px solid #D4D4D8; background: #FFFFFF; border-radius: 6px; font: 500 12px Inter, sans-serif; color: #111111; cursor: pointer; transition: opacity 150ms;")}>Refund sale</button>}
+                                {r.status === "open" && r.funded && <button className="press bs ra" type="button" onClick={() => setConfirm(r)} style={st("opacity: 0; height: 24px; padding: 0 8px; border: 1px solid #D4D4D8; background: #FFFFFF; border-radius: 6px; font: 500 12px Inter, sans-serif; color: #111111; cursor: pointer; transition: opacity 150ms;")}>Refund sale</button>}
                               </td>
                             </tr>
                           );
@@ -324,11 +419,20 @@ export default function Merchant() {
           <nav aria-label="Breadcrumb" style={st("font-size: 13px; color: #6B6B6B; display: flex; gap: 8px;")}><Link to="/" style={st("color: #6B6B6B;")}>Noux</Link><span aria-hidden="true">/</span><span style={st("color: #111111;")}>Merchant overview</span></nav>
           <span style={{ flex: 1 }} />
           <Freshness ageSeconds={fresh.info?.ageSeconds} fetchedAt={fresh.fetchedAt} now={fresh.now} error={fresh.error} />
+          <WalletButton compact />
         </header>
         <main style={st("padding: 28px clamp(16px, 3vw, 32px) 64px; display: flex; flex-direction: column; gap: 28px; max-width: 1240px; width: 100%;")}>{body}</main>
       </div>
-      {creating && <CreateSheet onClose={() => setCreating(false)} />}
-      {confirm && <RefundDialog sale={confirm} onClose={() => setConfirm(null)} />}
+      {creating && <CreateSheet onClose={() => setCreating(false)} onCreated={(c) => { setCreating(false); list.retry(); setToast({ text: "Campaign created and listed. The directory updates within a minute.", to: `/campaigns/${c}` }); }} />}
+      {confirm && <RefundDialog sale={confirm} merchant={mine.find((c) => c.address === confirm.campaign)?.merchant ?? null} onClose={() => setConfirm(null)} onDone={(r) => { setConfirm(null); list.retry(); setToast({ text: `Sale refunded. The buyer has ${fmtAmount(r.vaultAmount !== "0" ? r.vaultAmount : r.gross, r.decimals)} USDC back.`, to: `/r/${r.sale}` }); }} />}
+      {toast && (
+        <div className="toast" role="status" style={st("position: fixed; z-index: 70; right: 24px; bottom: 24px; max-width: calc(100% - 48px); background: #111111; color: #FFFFFF; border-radius: 12px; padding: 12px 16px; font-size: 14px; display: flex; align-items: center; gap: 12px; box-shadow: 0 12px 24px -8px rgb(0 0 0 / .3);")}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5EEAD4" strokeWidth="2" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+          <span>{toast.text}</span>
+          {toast.to && <Link to={toast.to} style={st("color: #5EEAD4; font: 500 13px Inter, sans-serif;")}>View</Link>}
+          <button type="button" onClick={() => setToast(null)} style={st("border: 0; background: none; color: #A1A1AA; font: 500 13px Inter, sans-serif; cursor: pointer; padding: 4px;")}>Dismiss</button>
+        </div>
+      )}
     </div>
   );
 }

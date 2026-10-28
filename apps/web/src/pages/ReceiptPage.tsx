@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { st } from "../lib/css";
 import { ApiError, explorerAddr, useApi, useCopy, useNow, type Campaign, type Receipt } from "../lib/api";
 import { verifyReceipt, type StepState } from "../lib/verify";
-import { fmtAmount, fullUtc, mmss, short, pctOf } from "../lib/format";
+import { fmtAmount, fullUtc, mmss, short, pctOf, projectedSplit } from "../lib/format";
 import { openText, Addr, CopyIcon, Disclosure, ErrorState, Page, SampleBadge, STATUS_COLORS, TopNav, WakingBanner } from "../components/common";
 
 const RING = "box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 1px 1px -.5px rgb(0 0 0 / .06), 0 3px 3px -1.5px rgb(0 0 0 / .06), 0 6px 6px -3px rgb(0 0 0 / .06), 0 12px 12px -6px rgb(0 0 0 / .06);";
@@ -111,16 +111,17 @@ export default function ReceiptPage() {
   const left = held && r.holdUntil ? (new Date(r.holdUntil).getTime() - now) / 1000 : 0;
   const statusText = held ? openText(r, left) : sc.label;
   const name = r.listing?.name ?? "Unlisted campaign";
-  const g = r.gross;
+  const g = r.status === "open" ? (r.funded ? r.vaultAmount : r.price) : r.gross;
+  const split = r.status === "open" ? projectedSplit(g, r.policy.commissionBps, r.policy.feeBps) : r.split; // a held sale has not split yet: show what it will pay out
   const f = (v: string) => fmtAmount(v, dec);
   const pct = (v: string) => pctOf(v, g).toFixed(2) + "%";
   const sumLine = refunded
     ? `${f(g)} returned to ${short(r.parties.buyer)} · no commission paid`
-    : `${held ? "Will pay out: " : ""}${f(r.split.merchant)} + ${f(r.split.distributor)} + ${f(r.split.protocolFee)} = ${f(g)} USDC · fee and commission rounded down, merchant gets the remainder`;
+    : `${held ? "Will pay out: " : ""}${f(split.merchant)} + ${f(split.distributor)} + ${f(split.protocolFee)} = ${f(g)} USDC · fee and commission rounded down, merchant gets the remainder`;
 
   const segBase = "min-width: 0; display: flex; align-items: center; color: #FFFFFF; ";
   const pend: CSSProperties = held ? { backgroundImage: "repeating-linear-gradient(135deg, rgba(255,255,255,.14) 0 7px, transparent 7px 14px)", backgroundSize: "28px 80px" } : {};
-  const mFlex = Number(r.split.merchant), dFlex = Number(r.split.distributor), fFlex = Number(r.split.protocolFee);
+  const mFlex = Number(split.merchant), dFlex = Number(split.distributor), fFlex = Number(split.protocolFee);
 
   type Part = { name: string; pct: string; addr: string | null; amt: string; swatch: string; color: string; anim: string };
   const parts: Part[] = refunded ? [
@@ -128,12 +129,12 @@ export default function ReceiptPage() {
     { name: "Distributor", pct: "no commission", addr: r.parties.distributor, amt: f("0"), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #0F766E; opacity: .3;", color: "#6B6B6B", anim: "l2" },
     { name: "Merchant", pct: "no payout", addr: r.parties.merchant, amt: f("0"), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #111111; opacity: .3;", color: "#6B6B6B", anim: "l3" },
   ] : [
-    { name: "Merchant", pct: pct(r.split.merchant), addr: r.parties.merchant, amt: f(r.split.merchant), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #111111;", color: "#111111", anim: "l1" },
-    { name: "Distributor", pct: pct(r.split.distributor), addr: r.parties.distributor, amt: f(r.split.distributor), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #0F766E;", color: "#0F766E", anim: "l2" },
-    { name: "Protocol fee", pct: pct(r.split.protocolFee), addr: r.parties.feeOwner ?? null, amt: f(r.split.protocolFee), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #D4D4D8;", color: "#111111", anim: "l3" },
+    { name: "Merchant", pct: pct(split.merchant), addr: r.parties.merchant, amt: f(split.merchant), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #111111;", color: "#111111", anim: "l1" },
+    { name: "Distributor", pct: pct(split.distributor), addr: r.parties.distributor, amt: f(split.distributor), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #0F766E;", color: "#0F766E", anim: "l2" },
+    { name: "Protocol fee", pct: pct(split.protocolFee), addr: r.parties.feeOwner ?? null, amt: f(split.protocolFee), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #D4D4D8;", color: "#111111", anim: "l3" },
   ];
 
-  const unpaid = held && BigInt(g) === 0n;
+  const unpaid = held && !r.funded;
   const lastTitle = unpaid ? "Waiting for payment" : held ? "Settles after the hold" : refunded ? "Refunded by merchant" : "Settled";
   const lastMeta = held
     ? `${left > 0 ? mmss(left) + " left · " : ""}anyone can settle after ${fullUtc(r.holdUntil)}`
@@ -174,7 +175,7 @@ export default function ReceiptPage() {
 
             <div style={st("display: flex; flex-wrap: wrap; gap: 16px 40px; align-items: flex-end; justify-content: space-between;")}>
               <div style={st("display: flex; flex-direction: column; gap: 6px;")}>
-                <span style={st("font-size: 14px; color: #6B6B6B;")}>{refunded ? "Buyer paid, then refunded" : "Buyer paid"}</span>
+                <span style={st("font-size: 14px; color: #6B6B6B;")}>{refunded ? "Buyer paid, then refunded" : unpaid ? "Awaiting payment of" : "Buyer paid"}</span>
                 <div className="tn" style={st("display: flex; align-items: baseline; gap: 10px;")}><span style={st("font-size: clamp(2.75rem, 1.8rem + 3vw, 4.5rem); line-height: 1; letter-spacing: -0.04em; font-weight: 500; color: #111111;")}>{f(g)}</span><span style={st("font-size: 20px; color: #6B6B6B;")}>USDC</span></div>
               </div>
               <div className="tn" style={st("display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #6B6B6B; text-align: right;")}>
@@ -187,8 +188,8 @@ export default function ReceiptPage() {
               {!refunded && (
                 <div style={st("position: relative; height: 80px;")}>
                   <div className="seg-in" style={st("display: flex; gap: 6px; height: 80px;")}>
-                    <div style={{ ...st(segBase + "background-color: #111111; border-radius: 14px 6px 6px 14px; padding: 0 20px; justify-content: space-between; gap: 8px;"), flex: `${mFlex} 1 0`, ...pend }}><span style={st("font-size: 14px; font-weight: 500;")}>Merchant</span><span className="tn" style={st("font-size: 13px; opacity: .8;")}>{pctOf(r.split.merchant, g).toFixed(0)}%</span></div>
-                    <div style={{ ...st(segBase + "min-width: 72px; background-color: #0F766E; border-radius: 6px; justify-content: center;"), flex: `${dFlex} 1 0`, ...pend }}><span className="tn" style={st("font-size: 14px; font-weight: 500;")}>{pctOf(r.split.distributor, g).toFixed(0)}%</span></div>
+                    <div style={{ ...st(segBase + "background-color: #111111; border-radius: 14px 6px 6px 14px; padding: 0 20px; justify-content: space-between; gap: 8px;"), flex: `${mFlex} 1 0`, ...pend }}><span style={st("font-size: 14px; font-weight: 500;")}>Merchant</span><span className="tn" style={st("font-size: 13px; opacity: .8;")}>{pctOf(split.merchant, g).toFixed(0)}%</span></div>
+                    <div style={{ ...st(segBase + "min-width: 72px; background-color: #0F766E; border-radius: 6px; justify-content: center;"), flex: `${dFlex} 1 0`, ...pend }}><span className="tn" style={st("font-size: 14px; font-weight: 500;")}>{pctOf(split.distributor, g).toFixed(0)}%</span></div>
                     <div style={{ ...st("min-width: 14px; background: #D4D4D8; border-radius: 6px 14px 14px 6px;"), flex: `${Math.max(fFlex, 1)} 1 0` }} />
                   </div>
                   <div className="unite" aria-hidden="true" style={st("position: absolute; inset: 0; background: #111111; border-radius: 14px;")} />

@@ -4,6 +4,8 @@ import { st } from "../lib/css";
 import { ApiError, useApi, useCopy, useIndexFreshness, useNow, type Campaign, type DistributorInfo, type Page as ApiPage, type Receipt } from "../lib/api";
 import { bpsPct, dayTime, fmt2, fmtAmount, mmss, short } from "../lib/format";
 import { isPubkey, useWalletAddress } from "../lib/wallet";
+import { useWallet } from "../lib/wallet-connect";
+import { WalletButton } from "../components/wallet-ui";
 import { AppSidebar, ViewingBar, WalletForm } from "../components/appshell";
 import { DevnetBadge, Dot, ErrorState, Freshness, SampleBadge, WakingBanner } from "../components/common";
 
@@ -22,13 +24,14 @@ function dailyEarned(sales: Receipt[], nowMs: number) {
   return { v, labels: v.map((_, i) => new Date(today - (DAYS - 1 - i) * day)) };
 }
 const mon = (d: Date) => d.toLocaleString("en-US", { month: "short", timeZone: "UTC" }) + " " + d.getUTCDate();
-const expected = (r: Receipt) => ((BigInt(r.price) * BigInt(r.policy.commissionBps)) / 10000n).toString();
+const expected = (r: Receipt) => ((BigInt(r.vaultAmount === "0" ? r.price : r.vaultAmount) * BigInt(r.policy.commissionBps)) / 10000n).toString();
 
 export default function Distributor() {
   const [sp, setSp] = useSearchParams();
   const [saved, setSaved] = useWalletAddress();
+  const cw = useWallet();
   const q = sp.get("wallet") ?? "";
-  const wallet = isPubkey(q) ? q : "";
+  const wallet = isPubkey(q) ? q : (cw.address ?? "");
   const pick = (a: string) => { setSaved(a); setSp({ wallet: a }); };
   const change = () => setSp({});
 
@@ -61,10 +64,13 @@ export default function Distributor() {
         { label: "Settings", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12h2M18 12h2M12 4v2M12 18v2" },
       ]}
       extra={
+        <>
+        <div style={st("display: flex;")}><WalletButton /></div>
         <Link className="press bs" to="/campaigns" style={st("display: flex; flex-direction: column; gap: 4px; padding: 12px; border: 1px solid #EBEBEB; border-radius: 12px; background: #FFFFFF; color: #333333;")}>
           <span style={st("font-size: 13px; font-weight: 500; color: #111111;")}>Find more campaigns</span>
           <span style={st("font-size: 12px; color: #6B6B6B;")}>{open.data ? `${open.data.total} campaign${open.data.total === 1 ? "" : "s"} with budget left` : "Browse the directory"}</span>
         </Link>
+        </>
       }
       footer={<div style={st("display: flex; align-items: center; gap: 8px; padding: 8px; border-top: 1px solid #EBEBEB;")}><DevnetBadge /><Freshness ageSeconds={fresh.info?.ageSeconds} fetchedAt={fresh.fetchedAt} now={fresh.now} error={fresh.error} /></div>}
     />
@@ -85,7 +91,7 @@ export default function Distributor() {
 
     const m = info.metrics;
     const recent = info.recent;
-    const heldSales = recent.filter((r) => r.status === "open" && BigInt(r.gross) > 0n);
+    const heldSales = recent.filter((r) => r.status === "open" && r.funded);
     const heldTotal = heldSales.reduce((a, r) => a + BigInt(expected(r)), 0n);
     const next = heldSales.map((r) => (r.holdUntil ? new Date(r.holdUntil).getTime() : 0)).filter(Boolean).sort((a, b) => a - b)[0];
     const leftSecs = next ? (next - now) / 1000 : 0;
@@ -112,7 +118,7 @@ export default function Distributor() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1" /><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" /></svg>Get referral link
           </a>
         </div>
-        <ViewingBar address={wallet} onChange={change} />
+        <ViewingBar address={wallet} onChange={change} connected={cw.address} />
 
         <section aria-label="Earnings summary" style={st("display: flex; flex-wrap: wrap; gap: 12px;")}>
           <div style={st("flex: 2 1 380px; border: 1px solid #EBEBEB; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 16px;")}>
@@ -250,7 +256,7 @@ export default function Distributor() {
                 const icon = s === "settled" ? ["M20 6 9 17l-5-5", "#0E7A2F", "#CAFACE"] : s === "open" ? ["M12 7v5l3 2", "#0058B0", "#E6F0FF"] : ["M18 6 6 18M6 6l12 12", "#6B6B6B", "#F4F4F5"];
                 const left = s === "open" && r.holdUntil ? (new Date(r.holdUntil).getTime() - now) / 1000 : 0;
                 const nm = camps.get(r.campaign)?.listing?.name ?? short(r.campaign);
-                const title = s === "settled" ? `${nm} sale settled` : s === "open" ? (BigInt(r.gross) === 0n ? `${nm} sale awaiting payment` : `${nm} sale held · ${left > 0 ? "settles in " + mmss(left) : "ready to settle"}`) : `${nm} sale refunded`;
+                const title = s === "settled" ? `${nm} sale settled` : s === "open" ? (!r.funded ? `${nm} sale awaiting payment` : `${nm} sale held · ${left > 0 ? "settles in " + mmss(left) : "ready to settle"}`) : `${nm} sale refunded`;
                 return (
                   <li key={r.sale} className="rh" style={st("display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid #EBEBEB;")}>
                     <span aria-hidden="true" style={{ ...st("width: 28px; height: 28px; border-radius: 9999px; display: flex; align-items: center; justify-content: center;"), background: icon[2] }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={icon[1]} strokeWidth="2"><path d={icon[0]} /></svg></span>

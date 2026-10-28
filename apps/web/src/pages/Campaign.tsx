@@ -4,6 +4,7 @@ import { st } from "../lib/css";
 import { ApiError, explorerAddr, useApi, useCopy, useIndexFreshness, useNow, type CampaignDetail, type Page as ApiPage, type Receipt } from "../lib/api";
 import { CATEGORIES, bpsPct, dateOnly, dayTime, fmt2, fmtAmount, fmtShort, initials, mmss, short } from "../lib/format";
 import { isPubkey, useWalletAddress } from "../lib/wallet";
+import { useWallet } from "../lib/wallet-connect";
 import { Addr, openText, Disclosure, Dot, ErrorState, Page, SaleBadge, SampleBadge, TopNav, WakingBanner } from "../components/common";
 
 const H2 = "font-size: 16px; line-height: 20px; letter-spacing: -0.01em; font-weight: 500; color: #111111;";
@@ -27,7 +28,9 @@ const mon = (d: Date) => d.toLocaleString("en-US", { month: "short", timeZone: "
 
 function Promote({ c }: { c: CampaignDetail }) {
   const [tab, setTab] = useState<"people" | "agents">("people");
-  const [wallet, setWallet] = useWalletAddress();
+  const [saved, setWallet] = useWalletAddress();
+  const cw = useWallet();
+  const wallet = saved || cw.address || "";
   const [copied, copy] = useCopy();
   const ok = isPubkey(wallet);
   const slug = (c.listing?.name ?? "campaign").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -232,7 +235,7 @@ export default function CampaignPage() {
                           <td style={st("padding: 0 12px 0 16px; border-bottom: 1px solid #EBEBEB;")}><Link className="mono" to={`/r/${r.sale}`} style={st("font-size: 12px;")}>{short(r.sale)}</Link> <span className="tn" style={st("font-size: 12px; color: #6B6B6B; margin-left: 6px;")}>{dayTime(r.settledAt ?? r.openedAt)}</span></td>
                           <td className="mono" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; font-size: 12px; color: #333333;")}>{short(r.parties.distributor)}</td>
                           <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB;")}><SaleBadge status={r.status} text={r.status === "open" ? openText(r, left) : undefined} /></td>
-                          <td className="tn" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right; color: #111111;")}>{fmtAmount(r.gross, r.decimals)}</td>
+                          <td className="tn" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right; color: #111111;")}>{fmtAmount(r.status === "open" ? r.vaultAmount : r.gross, r.decimals)}</td>
                           <td className="tn" style={st("padding: 0 16px 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right; color: #111111;")}>{r.status === "refunded" ? "—" : fmtAmount(r.split.distributor, r.decimals)}</td>
                         </tr>
                       );

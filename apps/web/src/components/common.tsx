@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { st } from "../lib/css";
 import { short } from "../lib/format";
 import { explorerAddr, useCopy } from "../lib/api";
+import { WalletButton } from "./wallet-ui";
 
 /** Fallback only: pages render the API's own `disclosure` string when they have it. */
 export const DISCLOSURE_FALLBACK =
@@ -43,8 +44,8 @@ export function SaleBadge({ status, text, dot = false }: { status: keyof typeof 
 }
 
 /** An open sale with nothing paid into its vault yet is "awaiting payment", not "held". */
-export function openText(r: { gross: string }, leftSecs: number): string {
-  if (BigInt(r.gross) === 0n) return "Awaiting payment";
+export function openText(r: { funded: boolean }, leftSecs: number): string {
+  if (!r.funded) return "Awaiting payment";
   return leftSecs > 0 ? `Held · ${mmssLocal(leftSecs)} left` : "Ready to settle";
 }
 const mmssLocal = (s: number) => `${Math.floor(Math.ceil(s) / 60)}:${String(Math.ceil(s) % 60).padStart(2, "0")}`;
@@ -99,6 +100,7 @@ export function TopNav({ variant = "app", surface = "#FFFFFF", cta = false }: { 
         </div>
         <div style={{ flex: 1 }} />
         <DevnetBadge />
+        {variant === "app" && <WalletButton compact />}
         {variant === "landing" && <Link className="nl hide-sm" to="/app/earnings" style={st("font-size: 14px; color: #6B6B6B;")}>Open app</Link>}
         {(variant === "landing" || cta) && (
           <Link className="press bi" to="/app/merchant" style={st("height: 36px; padding: 0 16px; border-radius: 9999px; background: #111111; color: #FFFFFF; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center;")}>Create campaign</Link>

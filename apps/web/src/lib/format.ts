@@ -85,3 +85,9 @@ export function mmss(secs: number): string {
   const s = Math.max(0, Math.ceil(secs));
   return `${Math.floor(s / 60)}:${p2(s % 60)}`;
 }
+
+/** What a sale WOULD pay out if settled now: fee and commission floored, merchant gets the remainder. Ignores the budget cap (the program applies it at settlement). */
+export function projectedSplit(amount: string | bigint, commissionBps: number, feeBps: number) {
+  const g = BigInt(amount), fee = (g * BigInt(feeBps)) / 10000n, comm = (g * BigInt(commissionBps)) / 10000n;
+  return { merchant: (g - fee - comm).toString(), distributor: comm.toString(), protocolFee: fee.toString() };
+}

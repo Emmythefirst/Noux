@@ -26,12 +26,12 @@ export async function syncOnce(pool: pg.Pool, chain: IndexerChain, opts: { enric
     }
     for (const x of snap.sales) {
       await c.query(
-        `INSERT INTO idx_sales (address, campaign, distributor, buyer, rent_payer, price, gross, merchant_amount, commission_amount, fee_amount, commission_bps, fee_bps, status, opened_at, hold_until, expiry, settled_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,to_timestamp($14),to_timestamp($15),to_timestamp($16),CASE WHEN $17::bigint IS NULL THEN NULL ELSE to_timestamp($17::bigint) END, now())
+        `INSERT INTO idx_sales (address, campaign, distributor, buyer, rent_payer, price, gross, merchant_amount, commission_amount, fee_amount, commission_bps, fee_bps, status, opened_at, hold_until, expiry, settled_at, vault_amount, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,to_timestamp($14),to_timestamp($15),to_timestamp($16),CASE WHEN $17::bigint IS NULL THEN NULL ELSE to_timestamp($17::bigint) END, $18, now())
          ON CONFLICT (address) DO UPDATE SET campaign=EXCLUDED.campaign, distributor=EXCLUDED.distributor, buyer=EXCLUDED.buyer, rent_payer=EXCLUDED.rent_payer, price=EXCLUDED.price, gross=EXCLUDED.gross,
            merchant_amount=EXCLUDED.merchant_amount, commission_amount=EXCLUDED.commission_amount, fee_amount=EXCLUDED.fee_amount, commission_bps=EXCLUDED.commission_bps, fee_bps=EXCLUDED.fee_bps,
-           status=EXCLUDED.status, opened_at=EXCLUDED.opened_at, hold_until=EXCLUDED.hold_until, expiry=EXCLUDED.expiry, settled_at=EXCLUDED.settled_at, updated_at=now()`,
-        [x.address, x.campaign, x.distributor, x.buyer, x.rentPayer, x.price, x.gross, x.merchantAmount, x.commissionAmount, x.feeAmount, x.commissionBps, x.feeBps, x.status, x.openedAt, x.holdUntil, x.expiry, x.settledAt],
+           status=EXCLUDED.status, opened_at=EXCLUDED.opened_at, hold_until=EXCLUDED.hold_until, expiry=EXCLUDED.expiry, settled_at=EXCLUDED.settled_at, vault_amount=EXCLUDED.vault_amount, updated_at=now()`,
+        [x.address, x.campaign, x.distributor, x.buyer, x.rentPayer, x.price, x.gross, x.merchantAmount, x.commissionAmount, x.feeAmount, x.commissionBps, x.feeBps, x.status, x.openedAt, x.holdUntil, x.expiry, x.settledAt, x.vaultAmount],
       );
     }
     await c.query("DELETE FROM idx_sales WHERE NOT (address = ANY($1::text[]))", [snap.sales.map((s) => s.address)]);
