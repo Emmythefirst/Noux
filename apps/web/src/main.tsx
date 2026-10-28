@@ -1,6 +1,7 @@
 import { StrictMode, Suspense, lazy, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Link, Route, Routes, useLocation } from "react-router-dom";
+import "./tokens.css";
 import "./styles.css";
 import Landing from "./pages/Landing";
 import Directory from "./pages/Directory";
@@ -12,6 +13,7 @@ import Distributor from "./pages/Distributor";
 import { Page, TopNav } from "./components/common";
 import { st } from "./lib/css";
 import { WalletProvider } from "./lib/wallet-connect";
+import { ThemeProvider } from "./lib/theme";
 
 const TITLES: [RegExp, string][] = [
   [/^\/campaigns\/.+/, "Campaign · Noux"], [/^\/campaigns/, "Campaigns · Noux"], [/^\/r\//, "Receipt · Noux"], [/^\/receipts/, "Receipts · Noux"],
@@ -42,6 +44,7 @@ function NotFound() {
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
+      <ThemeProvider>
       <WalletProvider>
       <Chrome>
         <Routes>
@@ -58,6 +61,7 @@ createRoot(document.getElementById("root")!).render(
         </Routes>
       </Chrome>
       </WalletProvider>
+      </ThemeProvider>
     </BrowserRouter>
   </StrictMode>,
 );

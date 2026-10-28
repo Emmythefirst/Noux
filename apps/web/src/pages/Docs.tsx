@@ -4,6 +4,7 @@ import { st } from "../lib/css";
 import { useApi, useCopy, useIndexFreshness, type IndexInfo } from "../lib/api";
 import { DevnetBadge, Dot, Mark, Page } from "../components/common";
 import { NavMenu } from "../components/navdrawer";
+import { ThemeToggle } from "../lib/theme";
 import { WalletButton } from "../components/wallet-ui";
 
 const PMS: [string, string][] = [["pnpm", "pnpm add @noux/gateway"], ["npm", "npm install @noux/gateway"], ["bun", "bun add @noux/gateway"]];
@@ -61,7 +62,7 @@ export default function Docs() {
 
   return (
     <Page>
-      <header style={st("position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,0.9); backdrop-filter: saturate(180%) blur(12px); -webkit-backdrop-filter: saturate(180%) blur(12px); border-bottom: 1px solid #EBEBEB;")}>
+      <header style={st("position: sticky; top: 0; z-index: 20; background: var(--glass-docs); backdrop-filter: saturate(180%) blur(12px); -webkit-backdrop-filter: saturate(180%) blur(12px); border-bottom: 1px solid #EBEBEB;")}>
         <nav aria-label="Primary" style={st("padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 24px;")}>
           <NavMenu />
           <Link to="/" aria-label="Noux home" style={st("display: flex; align-items: center; gap: 10px; color: #111111; margin-left: -16px;")}>
@@ -79,6 +80,7 @@ export default function Docs() {
           </div>
           <DevnetBadge />
           <WalletButton compact />
+          <ThemeToggle />
         </nav>
       </header>
 

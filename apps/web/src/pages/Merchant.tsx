@@ -9,6 +9,7 @@ import { getBlockhash, useWallet } from "../lib/wallet-connect";
 import { RPC_URL } from "../lib/verify";
 import { WalletButton } from "../components/wallet-ui";
 import { NavMenu } from "../components/navdrawer";
+import { ThemeToggle } from "../lib/theme";
 import { isPubkey, useWalletAddress } from "../lib/wallet";
 import { AppSidebar, ViewingBar, WalletForm } from "../components/appshell";
 import { openText, DevnetBadge, Dot, ErrorState, Freshness, SampleBadge, SaleBadge, WakingBanner } from "../components/common";
@@ -422,6 +423,7 @@ export default function Merchant() {
           <span style={{ flex: 1 }} />
           <Freshness ageSeconds={fresh.info?.ageSeconds} fetchedAt={fresh.fetchedAt} now={fresh.now} error={fresh.error} />
           <WalletButton compact />
+          <ThemeToggle />
         </header>
         <main style={st("padding: 28px clamp(16px, 3vw, 32px) 64px; display: flex; flex-direction: column; gap: 28px; max-width: 1240px; width: 100%;")}>{body}</main>
       </div>

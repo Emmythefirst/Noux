@@ -3,6 +3,9 @@ import { createPortal } from "react-dom";
 import { Link, useLocation } from "react-router-dom";
 import { st } from "../lib/css";
 import { Mark } from "./common";
+import { WalletButton } from "./wallet-ui";
+import { ThemeToggle } from "../lib/theme";
+import { useApi, type Page, type Campaign } from "../lib/api";
 
 const GROUPS: { title: string; items: { label: string; to: string; icon: string }[] }[] = [
   { title: "Explore", items: [
@@ -25,6 +28,7 @@ export function NavMenu() {
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
   const first = useRef<HTMLAnchorElement>(null);
+  const open_ = useApi<Page<Campaign>>(open ? "/campaigns?status=active&limit=1" : null);
   useEffect(() => setOpen(false), [pathname]);
   useEffect(() => {
     if (!open) return;
@@ -48,6 +52,11 @@ export function NavMenu() {
               <button className="press gh" type="button" aria-label="Close menu" onClick={() => setOpen(false)} style={st("width: 32px; height: 32px; border: 0; background: transparent; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center;")}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#333333" strokeWidth="1.5" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
             </div>
             <div style={st("padding: 12px; display: flex; flex-direction: column; gap: 16px;")}>
+              <div style={st("display: flex; align-items: center; gap: 8px; padding: 0 4px;")}>
+                <WalletButton align="left" />
+                <span style={{ flex: 1 }} />
+                <ThemeToggle />
+              </div>
               {GROUPS.map((g, gi) => (
                 <div key={g.title} style={st("display: flex; flex-direction: column; gap: 2px;")}>
                   <span style={st("font-size: 12px; font-weight: 500; color: #6B6B6B; padding: 0 8px 6px;")}>{g.title}</span>
@@ -57,6 +66,7 @@ export function NavMenu() {
                       <Link key={it.label} ref={gi === 0 && ii === 0 ? first : undefined} className="nv" to={it.to} aria-current={cur ? "page" : undefined}
                         style={st("height: 36px; padding: 0 8px; border-radius: 8px; display: flex; align-items: center; gap: 10px; font-size: 14px; " + (cur ? "background: #F4F4F5; color: #111111; font-weight: 500;" : "color: #333333;"))}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d={it.icon} /></svg>{it.label}
+                        {it.label === "Campaigns" && open_.data && <span className="tn" style={st("margin-left: auto; font-size: 12px; color: #6B6B6B;")}>{open_.data.total} with budget left</span>}
                       </Link>
                     );
                   })}

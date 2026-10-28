@@ -7,6 +7,7 @@ import { isPubkey, useWalletAddress } from "../lib/wallet";
 import { useWallet } from "../lib/wallet-connect";
 import { WalletButton } from "../components/wallet-ui";
 import { NavMenu } from "../components/navdrawer";
+import { ThemeToggle } from "../lib/theme";
 import { AppSidebar, ViewingBar, WalletForm } from "../components/appshell";
 import { DevnetBadge, Dot, ErrorState, Freshness, SampleBadge, WakingBanner } from "../components/common";
 
@@ -55,6 +56,7 @@ export default function Distributor() {
           <NavMenu />
           <span aria-hidden="true" style={st("width: 24px; height: 24px; border-radius: 9999px; background: #0F766E; color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center; font: 600 10px Inter, sans-serif;")}>{wallet ? wallet.slice(0, 2) : "—"}</span>
           <span style={st("flex: 1; display: flex; flex-direction: column;")}><span className="mono" style={st("font-size: 13px; color: #111111;")}>{wallet ? short(wallet) : "No address"}</span><span style={st("font: 400 12px Inter, sans-serif; color: #6B6B6B;")}>Distributor · devnet</span></span>
+          <ThemeToggle />
         </div>
       }
       nav={[
