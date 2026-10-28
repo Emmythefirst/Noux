@@ -48,7 +48,7 @@ const bal = async (a: PublicKey) => { try { return Number((await withRetry(() =>
 const snap = async () => ({ m: await bal(ata(merchant.publicKey)), d: await bal(ata(distributor.publicKey)), f: await bal(ata(feeOwner.publicKey)), b: await bal(ata(buyer.publicKey)) });
 
 
-const N = Number(process.env.N ?? 40), PRICE_L = 10_000n, HAMMER = Number(process.env.HAMMER ?? 30);
+const N = Number(process.env.N ?? 40), PRICE_L = BigInt(process.env.PRICE ?? 10_000), HAMMER = Number(process.env.HAMMER ?? 30);
 const payer = buyer; // the deploy wallet is the gateway payer (pays rent) and funds the buyers
 const program = new anchor.Program(idl as anchor.Idl, new anchor.AnchorProvider(conn, new anchor.Wallet(payer), { commitment: "confirmed" }));
 for (const o of [merchant, distributor, feeOwner]) await getOrCreateAssociatedTokenAccount(conn, payer, USDC, o.publicKey);
@@ -60,7 +60,12 @@ await program.methods.createCampaign(cid, COMMISSION_BPS, new anchor.BN(1_000_00
 console.log("campaign:", campaign.toBase58());
 
 // ---- buyers: fresh wallets with USDC only (the facilitator pays the network fee) ----
+// Refuse to start if the payer cannot fund every buyer, and save the keys BEFORE funding: a run that dies half way must never strand USDC in keys nobody has.
+const need = PRICE_L * BigInt(N), have = await bal(ata(payer.publicKey));
+if (BigInt(have) < need) { console.error(`not enough devnet USDC: need ${need} base units for ${N} buyers, payer has ${have}`); process.exit(2); }
 const buyers = Array.from({ length: N }, () => Keypair.generate());
+const keyFile = path.join(os.tmpdir(), `noux-load-buyers-${Date.now()}.json`); fs.writeFileSync(keyFile, JSON.stringify(buyers.map((b) => Array.from(b.secretKey))), { mode: 0o600 });
+console.log(`buyer keys saved to ${keyFile} (delete after the run)`);
 const { createAssociatedTokenAccountIdempotentInstruction, createTransferInstruction } = await import("@solana/spl-token");
 for (let i = 0; i < buyers.length; i += 5) {
   const tx = new Transaction(); for (const b of buyers.slice(i, i + 5)) tx.add(createAssociatedTokenAccountIdempotentInstruction(payer.publicKey, ata(b.publicKey), b.publicKey, USDC), createTransferInstruction(ata(payer.publicKey), ata(b.publicKey), payer.publicKey, PRICE_L));
@@ -154,4 +159,11 @@ rec(`same claim x${HAMMER} concurrently: all answered 402 and the sale was opene
 const solAfter = await conn.getBalance(payer.publicKey), usdcAfter = await bal(ata(payer.publicKey));
 console.log(`gateway payer SOL spent: ${(solBefore - solAfter) / 1e9} for ${mine.length + 1} sales (incl. funding the buyers' ATAs); USDC moved from payer: ${usdcBefore - usdcAfter}`);
 const failed = results.filter((r) => !r.ok); console.log(`\n${results.length - failed.length}/${results.length} invariants held; ${ok.length}/${N} buyers served`);
+// give the throwaway buyers' empty token accounts back (their rent returns to the payer); buyers that still hold USDC are left alone
+if (process.env.CLEANUP !== "0") {
+  const { createCloseAccountInstruction } = await import("@solana/spl-token"); let closed = 0;
+  const empty: Keypair[] = []; for (const b of buyers) if ((await bal(ata(b.publicKey))) === 0) empty.push(b);
+  for (let i = 0; i < empty.length; i += 4) { const grp = empty.slice(i, i + 4); try { await sendAndConfirmTransaction(conn, new Transaction().add(...grp.map((b) => createCloseAccountInstruction(ata(b.publicKey), payer.publicKey, b.publicKey))), [payer, ...grp]); closed += grp.length; } catch (e) { console.log("cleanup batch failed:", String((e as Error).message).slice(0, 80)); } }
+  console.log(`closed ${closed}/${buyers.length} buyer token accounts; payer SOL now ${((await conn.getBalance(payer.publicKey)) / 1e9).toFixed(4)}`);
+}
 await new Promise((r) => srv.close(r)); await pool.end(); process.exit(failed.length ? 1 : 0);

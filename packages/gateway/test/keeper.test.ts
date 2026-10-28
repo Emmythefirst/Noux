@@ -106,3 +106,35 @@ describe("keeper reads vault balances in batches", () => {
     const { k } = mk(w); const r = await k.tick(); expect(r.skipped).toBe(1); expect(r.waiting).toBe(1);
   });
 });
+
+describe("keeper works through a backlog concurrently", () => {
+  function slow(ms = 20) {
+    const w = world(); let inFlight = 0, maxInFlight = 0; const order: string[] = [];
+    const wrap = (name: string, f: (s: string) => Promise<string>) => async (s: string) => { inFlight++; maxInFlight = Math.max(maxInFlight, inFlight); order.push(name + ":" + s); await new Promise((r) => setTimeout(r, ms)); try { return await f(s); } finally { inFlight--; } };
+    (w.chain as any).settle = wrap("settle", async (s) => { if (w.failSettle.has(s)) throw new Error("rpc boom"); w.settled.push(s); w.sales.delete(s); w.bal.set(s, null); return "sig"; });
+    (w.chain as any).closeExpired = wrap("close", async (s) => { w.closed.push(s); w.sales.delete(s); w.bal.set(s, null); return "sig"; });
+    return { w, max: () => maxInFlight, order };
+  }
+  it("closes 60 expired sales with bounded concurrency (not one by one, not all at once)", async () => {
+    const { w, max } = slow(); for (let i = 0; i < 60; i++) w.add("E" + i, { expiry: w.now() - 1, holdUntil: w.now() - 100 }, 0n);
+    const k = new Keeper({ chain: w.chain, seen: new MemorySeenStore(), now: w.now, concurrency: 6 });
+    const t = Date.now(); const r = await k.tick(); const took = Date.now() - t;
+    expect(r.closed.length).toBe(60); expect(max()).toBe(6); expect(took).toBeLessThan(60 * 20 * 0.5); // sequential would take >= 1200 ms
+  });
+  it("settlements go before closes, so money is not stuck behind a pile of rent reclaims", async () => {
+    const { w, order } = slow(); for (let i = 0; i < 12; i++) w.add("E" + i, { expiry: w.now() - 1, holdUntil: w.now() - 100 }, 0n);
+    for (let i = 0; i < 4; i++) w.add("F" + i, { holdSecs: 0, holdUntil: w.now() - 1 }, 100n);
+    const k = new Keeper({ chain: w.chain, seen: new MemorySeenStore(), now: w.now, concurrency: 3 }); await k.tick();
+    const lastSettle = Math.max(...order.map((o, i) => (o.startsWith("settle") ? i : -1))), firstClose = order.findIndex((o) => o.startsWith("close"));
+    expect(lastSettle).toBeLessThan(firstClose);
+  });
+  it("one failing sale does not stop the others, and results keep a stable order", async () => {
+    const { w } = slow(5); for (const id of ["A", "B", "C", "D"]) w.add(id, { holdSecs: 0, holdUntil: w.now() - 1 }, 100n); w.failSettle.add("B");
+    const k = new Keeper({ chain: w.chain, seen: new MemorySeenStore(), now: w.now, concurrency: 4 }); const r = await k.tick();
+    expect(r.settled).toEqual(["A", "C", "D"]); expect(r.failed.map((f) => f.sale)).toEqual(["B"]);
+  });
+  it("concurrency 1 behaves exactly like the old sequential keeper", async () => {
+    const { w, max } = slow(5); for (let i = 0; i < 5; i++) w.add("E" + i, { expiry: w.now() - 1, holdUntil: w.now() - 100 }, 0n);
+    const k = new Keeper({ chain: w.chain, seen: new MemorySeenStore(), now: w.now, concurrency: 1 }); await k.tick(); expect(max()).toBe(1);
+  });
+});
