@@ -32,8 +32,10 @@ export default function Distributor() {
   const { hash } = useLocation();
   const q = sp.get("wallet") ?? "";
   const wallet = isPubkey(q) ? q : (cw.address ?? "");
-  const pick = (a: string) => { setSaved(a); setSp({ wallet: a }); };
-  const change = () => setSp({});
+  const [changing, setChanging] = useState(false);
+  const pick = (a: string) => { setSaved(a); setSp({ wallet: a }); setChanging(false); };
+  const change = () => setChanging(true);
+  const back = () => { setSp({}); setChanging(false); }; // drop the pasted address: fall back to the connected wallet (or the empty form)
 
   const d = useApi<DistributorInfo>(wallet ? `/distributors/${wallet}` : null);
   const all = useApi<ApiPage<Campaign>>(wallet ? "/campaigns?includeUnlisted=1&limit=100" : null);
@@ -46,13 +48,13 @@ export default function Distributor() {
   const camps = new Map((all.data?.items ?? []).map((c) => [c.address, c]));
 
   const body = (() => {
-    if (!wallet) return (
+    if (!wallet || changing) return (
       <>
         <div style={st("display: flex; flex-direction: column; gap: 4px;")}>
           <h1 style={st("font-size: 20px; line-height: 26px; letter-spacing: -0.015em; font-weight: 500; color: #111111;")}>Earnings</h1>
           <p style={st("font-size: 14px; color: #6B6B6B;")}>Commission from buyers you referred, read from the chain.</p>
         </div>
-        <WalletForm initial={saved} onSubmit={pick} label="Which wallet are you earning to?" example={{ label: "See the sample distributor", address: SAMPLE_DISTRIBUTOR }} />
+        <WalletForm initial={saved} onSubmit={pick} label="Which wallet are you earning to?" onCancel={wallet ? (cw.address ? back : () => setChanging(false)) : undefined} cancelLabel={cw.address ? "Use my connected wallet" : "Cancel"} example={{ label: "See the sample distributor", address: SAMPLE_DISTRIBUTOR }} />
       </>
     );
     if (d.loading) return d.waking ? <WakingBanner /> : <p role="status" style={st("font-size: 14px; color: #6B6B6B;")}>Loading earnings…</p>;

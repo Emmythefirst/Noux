@@ -34,7 +34,7 @@ export function AppSidebar({ ident, nav, extra, footer, label }: { ident: ReactN
 }
 
 /** Wallet address entry. There is no wallet connection yet: this only chooses whose public numbers to read. */
-export function WalletForm({ initial, onSubmit, label, example }: { initial: string; onSubmit: (a: string) => void; label: string; example?: { label: string; address: string } }) {
+export function WalletForm({ initial, onSubmit, label, example, onCancel, cancelLabel }: { initial: string; onSubmit: (a: string) => void; label: string; example?: { label: string; address: string }; onCancel?: () => void; cancelLabel?: string }) {
   const [v, setV] = useState(initial);
   const ok = isPubkey(v);
   const go = (e: FormEvent) => { e.preventDefault(); if (ok) onSubmit(v); };
@@ -48,6 +48,7 @@ export function WalletForm({ initial, onSubmit, label, example }: { initial: str
       </div>
       {v !== "" && !ok && <span style={st("font-size: 12px; color: #B42318;")}>That doesn’t look like a Solana address.</span>}
       <p style={st("font-size: 12px; line-height: 18px; color: #6B6B6B;")}>Connect a wallet (top right) to act as that wallet, or paste any address to read its public on-chain numbers. Pasting an address can’t sign anything.</p>
+      {onCancel && <button type="button" onClick={onCancel} style={st("align-self: flex-start; border: 0; background: none; padding: 0; color: #0F766E; font: 500 13px Inter, sans-serif; cursor: pointer;")}>{cancelLabel ?? "Cancel"}</button>}
       {example && <button type="button" onClick={() => onSubmit(example.address)} style={st("align-self: flex-start; border: 0; background: none; padding: 0; color: #0F766E; font: 500 13px Inter, sans-serif; cursor: pointer;")}>{example.label} ({short(example.address)}) →</button>}
     </form>
   );

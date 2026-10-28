@@ -228,7 +228,9 @@ export default function Merchant() {
   const wallet = isPubkey(q) ? q : (w.address ?? ""); // a pasted address wins; otherwise the connected wallet
   const [toast, setToast] = useState<{ text: string; to?: string } | null>(null);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 8000); return () => clearTimeout(t); }, [toast]);
-  const pick = (a: string) => { setSaved(a); setSp({ wallet: a }); };
+  const [changing, setChanging] = useState(false);
+  const pick = (a: string) => { setSaved(a); setSp({ wallet: a }); setChanging(false); };
+  const back = () => { setSp({}); setChanging(false); }; // drop the pasted address: fall back to the connected wallet (or the empty form)
   const { pathname } = useLocation();
   const section = (["campaigns", "sales", "receipts", "budget", "distributors", "settings"] as const).find((x) => pathname === `/app/merchant/${x}`) ?? "overview";
   const keep = sp.get("wallet") && isPubkey(sp.get("wallet")!) ? `?wallet=${sp.get("wallet")}` : ""; // a pasted address stays in the URL as you move between sections
@@ -280,10 +282,10 @@ export default function Merchant() {
 
   const body = (() => {
     if (section === "settings") return <SettingsPanel />;
-    if (!wallet) return (
+    if (!wallet || changing) return (
       <>
         <div style={st("display: flex; flex-direction: column; gap: 4px;")}><h1 style={st("font-size: 20px; line-height: 26px; letter-spacing: -0.015em; font-weight: 500; color: #111111;")}>Overview</h1><p style={st("font-size: 14px; color: #6B6B6B;")}>Sales across your campaigns.</p></div>
-        <WalletForm initial={saved} onSubmit={pick} label="Which merchant wallet?" example={{ label: "See the sample merchant", address: SAMPLE_MERCHANT }} />
+        <WalletForm initial={saved} onSubmit={pick} label="Which merchant wallet?" onCancel={wallet ? (w.address ? back : () => setChanging(false)) : undefined} cancelLabel={w.address ? "Use my connected wallet" : "Cancel"} example={{ label: "See the sample merchant", address: SAMPLE_MERCHANT }} />
         <button className="press bp" type="button" onClick={() => setCreating(true)} style={st("align-self: flex-start; height: 32px; padding: 0 12px; border: 0; border-radius: 10px; background: #0F766E; color: #FFFFFF; font: 500 13px Inter, sans-serif; cursor: pointer;")}>Create campaign</button>
       </>
     );
@@ -467,7 +469,7 @@ export default function Merchant() {
           </div>
           <button className="press bp" type="button" onClick={() => setCreating(true)} style={st("height: 32px; padding: 0 12px; border: 0; border-radius: 10px; background: #0F766E; color: #FFFFFF; font: 500 13px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;")}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>Create campaign</button>
         </div>
-        <ViewingBar address={wallet} onChange={() => setSp({})} connected={w.address} />
+        <ViewingBar address={wallet} onChange={() => setChanging(true)} connected={w.address} />
 
         {sampleSome && (
           <div role="note" style={st("display: flex; gap: 10px; align-items: center; padding: 10px 14px; border: 1px solid #EBEBEB; border-radius: 10px; background: #FAFAFA; font-size: 13px; color: #333333;")}>
