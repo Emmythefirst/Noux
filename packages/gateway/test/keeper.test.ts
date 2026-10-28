@@ -80,3 +80,29 @@ describe("keeper housekeeping", () => {
     expect((await k.tick()).failed[0].sale).toBe("*");
   });
 });
+
+describe("keeper reads vault balances in batches", () => {
+  function batched() {
+    const w = world(); let singles = 0, batches = 0, failBatch = false;
+    (w.chain as any).vaultBalance = async (s: string) => { singles++; return w.bal.has(s) ? w.bal.get(s)! : null; };
+    (w.chain as any).vaultBalances = async (ids: string[]) => { batches++; if (failBatch) throw new Error("rpc down"); return new Map(ids.map((i) => [i, w.bal.has(i) ? w.bal.get(i)! : null])); };
+    return { w, counts: () => ({ singles, batches }), fail: (v: boolean) => { failBatch = v; } };
+  }
+  it("300 open sales cost one batched read, not 300 single reads, and behave exactly as before", async () => {
+    const { w, counts } = batched();
+    for (let i = 0; i < 300; i++) w.add("S" + i, { holdSecs: 0, holdUntil: w.now() - 1 }, i % 2 ? 100n : 0n);
+    const { k } = mk(w); await k.tick(); // first sight of the funded ones: clock starts (holdSecs 0 => settle immediately on the same tick)
+    expect(counts().singles).toBe(0); expect(counts().batches).toBe(1);
+    expect(w.settled.length).toBe(150); // only the funded half
+  });
+  it("if the batch read fails the keeper falls back to per-sale reads (nothing is skipped)", async () => {
+    const { w, counts, fail } = batched(); fail(true);
+    for (let i = 0; i < 5; i++) w.add("S" + i, { holdSecs: 0, holdUntil: w.now() - 1 }, 100n);
+    const { k } = mk(w); const r = await k.tick();
+    expect(counts().singles).toBe(5); expect(r.settled.length).toBe(5);
+  });
+  it("a vault missing from the batch is treated as gone (skipped), like a single read returning null", async () => {
+    const { w } = batched(); w.add("A", {}, 100n); w.add("B", {}, 100n); w.bal.set("B", null);
+    const { k } = mk(w); const r = await k.tick(); expect(r.skipped).toBe(1); expect(r.waiting).toBe(1);
+  });
+});

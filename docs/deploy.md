@@ -83,6 +83,21 @@ Try it end to end with the scripted buyer agent: `pnpm demo-buy`.
 - **What to do for more:** a paid RPC plan with higher limits, and watch for 429s. Caching a blockhash and batching confirmations would cut calls further and are not built.
 - Not measured: more than 40 buyers, a keeper under load, mainnet, hours-long runs.
 
+## Measured capacity: indexer and public API (synthetic data, 2026-10-28)
+`apps/api/scripts/indexer-scale.ts` runs the real `syncOnce` and the real HTTP routes over a real Postgres, with synthetic snapshots (no chain, local Postgres with almost no network delay, so a hosted database will be somewhat slower). Before and after rewriting the sync:
+
+| Sales indexed | One sync with no changes, before | After | First full sync, after |
+|---|---|---|---|
+| 1,000 | 0.9 s | 0.1 s | 0.25 s |
+| 5,000 | 7.2 s | 0.13 s | 0.7 s |
+| 20,000 | 16.9 s | 0.24 s | 1.9 s |
+| 50,000 | not run | 0.6 to 1.8 s | 4 to 9 s |
+
+- The old sync rewrote every sale one row at a time on every pass. Finished sales never change on-chain, so only new and open sales are written now, in batches of 500.
+- API latency (campaign list, stats, receipts, one distributor, one campaign's sales) stayed under about 200 ms at 50,000 sales; one 4.6 s campaign-list reading at 50,000 did not reproduce in two reruns (probably stale planner statistics right after a bulk load).
+- The explorer links (open, payment, settlement) are filled in the background, 30 sales per sync, newest first, with exponential backoff for sales that cannot be read. A new index of 5,000 old sales takes about 3 hours to link them all; 20,000 takes about 11 hours. Sales without links still show their numbers.
+- **Not measured:** the real RPC cost. The snapshot downloads every Sale account each minute (about 246 bytes each: 1.2 MB at 5,000 sales, 12 MB at 50,000), so past tens of thousands of sales this call is the limit; the fix is incremental sync (not built). The keeper reads vault balances 100 per RPC call.
+
 ## RPC usage and free hours
 - The indexer (every 60 s) and the keeper (every 30 s) use `getProgramAccounts`, the heaviest kind of RPC call. Check your RPC plan's
   usage dashboard; tune `INDEXER_INTERVAL_SECONDS` / `KEEPER_TICK_SECONDS`, or set `ENABLE_INDEXER=0`.

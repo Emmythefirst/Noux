@@ -33,3 +33,16 @@ describe("keeper scan only downloads OPEN sales", () => {
     expect(out.length).toBe(1); expect(out[0].price).toBe(5n);
   });
 });
+
+describe("AnchorKeeperChain.vaultBalances", () => {
+  it("reads vault balances 100 per RPC call and decodes the SPL amount (u64 at offset 64); missing account = null", async () => {
+    const calls: number[] = [];
+    const tokenAcct = (amt: bigint) => { const b = Buffer.alloc(165); b.writeBigUInt64LE(amt, 64); return { data: b }; };
+    const connection: any = { getMultipleAccountsInfo: async (keys: PublicKey[]) => { calls.push(keys.length); return keys.map((_, i) => (i % 3 === 2 ? null : tokenAcct(BigInt(1000 + i)))); } };
+    const chain = new AnchorKeeperChain({ connection, programId: new PublicKey((idl as any).address), mint: pk(), payer: Keypair.generate() });
+    const sales = Array.from({ length: 250 }, () => pk().toBase58());
+    const out = await chain.vaultBalances(sales);
+    expect(calls).toEqual([100, 100, 50]); expect(out.size).toBe(250);
+    expect(out.get(sales[0])).toBe(1000n); expect(out.get(sales[1])).toBe(1001n); expect(out.get(sales[2])).toBeNull(); expect(out.get(sales[101])).toBe(1001n);
+  });
+});

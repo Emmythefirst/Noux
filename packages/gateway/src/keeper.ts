@@ -14,6 +14,8 @@ export interface KeeperChain {
   listOpenSales(): Promise<OpenSale[]>;
   /** Vault token balance, or null if the vault no longer exists. */
   vaultBalance(sale: string): Promise<bigint | null>;
+  /** Optional batch form (one RPC call per ~100 sales instead of one per sale). Missing entries mean the vault does not exist. */
+  vaultBalances?(sales: string[]): Promise<Map<string, bigint | null>>;
   settle(sale: string): Promise<string>;
   closeExpired(sale: string): Promise<string>;
 }
@@ -40,9 +42,12 @@ export class Keeper {
     const now = this.now();
     let sales: OpenSale[];
     try { sales = await this.o.chain.listOpenSales(); } catch (e) { r.failed.push({ sale: "*", error: String((e as Error).message).slice(0, 160) }); return r; }
+    // one batched read for all open sales when the chain adapter supports it; a failure falls back to per-sale reads
+    let batch: Map<string, bigint | null> | null = null;
+    if (this.o.chain.vaultBalances && sales.length > 1) { try { batch = await this.o.chain.vaultBalances(sales.map((x) => x.sale)); } catch { batch = null; } }
     for (const s of sales) {
       try {
-        const bal = await this.o.chain.vaultBalance(s.sale);
+        const bal = batch ? (batch.get(s.sale) ?? null) : await this.o.chain.vaultBalance(s.sale);
         if (bal === null) { await this.o.seen.delete(s.sale); r.skipped++; continue; }
         if (bal < s.price) {
           await this.o.seen.delete(s.sale); // not (or no longer) funded: the clock must restart if it is funded again

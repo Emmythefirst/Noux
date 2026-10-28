@@ -130,6 +130,17 @@ export class AnchorKeeperChain implements KeeperChain {
     catch (e) { if (/could not find account|Invalid param/i.test(String((e as Error).message))) return null; throw e; }
   }
 
+  /** SPL token account amount is the u64 at offset 64; null = the vault account does not exist. */
+  async vaultBalances(sales: string[]): Promise<Map<string, bigint | null>> {
+    const out = new Map<string, bigint | null>();
+    for (let i = 0; i < sales.length; i += 100) {
+      const chunk = sales.slice(i, i + 100);
+      const infos = await this.o.connection.getMultipleAccountsInfo(chunk.map((s) => this.ata(new PublicKey(s))), "confirmed");
+      chunk.forEach((s, k) => { const d = infos[k]?.data; out.set(s, d && d.length >= 72 ? d.readBigUInt64LE(64) : null); });
+    }
+    return out;
+  }
+
   async settle(sale: string): Promise<string> {
     const salePk = new PublicKey(sale); const s: any = await (this.program.account as any).sale.fetch(salePk); const c = await this.campaign(s.campaign);
     const pre = [c.merchant, s.distributor, c.feeOwner].map((o: PublicKey) => createAssociatedTokenAccountIdempotentInstruction(this.o.payer.publicKey, this.ata(o), o, this.o.mint));
