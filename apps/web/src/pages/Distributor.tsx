@@ -54,7 +54,7 @@ export default function Distributor() {
           <h1 style={st("font-size: 20px; line-height: 26px; letter-spacing: -0.015em; font-weight: 500; color: #111111;")}>Earnings</h1>
           <p style={st("font-size: 14px; color: #6B6B6B;")}>Commission from buyers you referred, read from the chain.</p>
         </div>
-        <WalletForm initial={saved} onSubmit={pick} label="Which wallet are you earning to?" onCancel={wallet ? (cw.address ? back : () => setChanging(false)) : undefined} cancelLabel={cw.address ? "Use my connected wallet" : "Cancel"} example={{ label: "See the sample distributor", address: SAMPLE_DISTRIBUTOR }} />
+        <WalletForm initial={saved} onSubmit={pick} onBack={wallet ? () => setChanging(false) : undefined} label="Which wallet are you earning to?" onCancel={wallet ? (cw.address ? back : () => setChanging(false)) : undefined} cancelLabel={cw.address ? "Use my connected wallet" : "Cancel"} example={{ label: "See the sample distributor", address: SAMPLE_DISTRIBUTOR }} />
       </>
     );
     if (d.loading) return d.waking ? <WakingBanner /> : <p role="status" style={st("font-size: 14px; color: #6B6B6B;")}>Loading earnings…</p>;

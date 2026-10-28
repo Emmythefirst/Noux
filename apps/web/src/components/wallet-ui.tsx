@@ -41,7 +41,7 @@ export function WalletModal({ onClose }: { onClose: () => void }) {
 }
 
 /** The design's wallet pill; "Connect wallet" when nothing is connected. */
-export function WalletButton({ compact = false, align = "right" }: { compact?: boolean; align?: "left" | "right" }) {
+export function WalletButton({ compact = false, align = "right", dropUp = false }: { compact?: boolean; align?: "left" | "right"; dropUp?: boolean }) {
   const { address, walletName, disconnect } = useWallet();
   const [modal, setModal] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -64,7 +64,7 @@ export function WalletButton({ compact = false, align = "right" }: { compact?: b
         <span className="mono" style={st("font-size: 12px;")}>{short(address)}</span>
       </button>
       {menu && (
-        <div role="menu" className="fadein" style={{ ...(align === "left" ? { left: 0 } : { right: 0 }), ...st("position: absolute; top: 42px; z-index: 40; min-width: 200px; background: #FFFFFF; border-radius: 12px; padding: 6px; box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 12px 24px -8px rgb(0 0 0 / .18);") }}>
+        <div role="menu" className="fadein" style={{ ...(align === "left" ? { left: 0 } : { right: 0 }), ...(dropUp ? { bottom: 42 } : { top: 42 }), ...st("position: absolute; z-index: 40; min-width: 200px; background: #FFFFFF; border-radius: 12px; padding: 6px; box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 12px 24px -8px rgb(0 0 0 / .18);") }}>
           <div style={st("padding: 8px 10px; font-size: 12px; color: #6B6B6B;")}>Connected with {walletName}</div>
           <button role="menuitem" className="press gh" type="button" onClick={() => { setMenu(false); void disconnect(); }} style={st("width: 100%; height: 32px; padding: 0 10px; border: 0; background: transparent; border-radius: 8px; font: 500 13px Inter, sans-serif; color: #111111; cursor: pointer; text-align: left;")}>Disconnect</button>
         </div>

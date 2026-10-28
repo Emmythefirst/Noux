@@ -285,7 +285,7 @@ export default function Merchant() {
     if (!wallet || changing) return (
       <>
         <div style={st("display: flex; flex-direction: column; gap: 4px;")}><h1 style={st("font-size: 20px; line-height: 26px; letter-spacing: -0.015em; font-weight: 500; color: #111111;")}>Overview</h1><p style={st("font-size: 14px; color: #6B6B6B;")}>Sales across your campaigns.</p></div>
-        <WalletForm initial={saved} onSubmit={pick} label="Which merchant wallet?" onCancel={wallet ? (w.address ? back : () => setChanging(false)) : undefined} cancelLabel={w.address ? "Use my connected wallet" : "Cancel"} example={{ label: "See the sample merchant", address: SAMPLE_MERCHANT }} />
+        <WalletForm initial={saved} onSubmit={pick} onBack={wallet ? () => setChanging(false) : undefined} label="Which merchant wallet?" onCancel={wallet ? (w.address ? back : () => setChanging(false)) : undefined} cancelLabel={w.address ? "Use my connected wallet" : "Cancel"} example={{ label: "See the sample merchant", address: SAMPLE_MERCHANT }} />
         <button className="press bp" type="button" onClick={() => setCreating(true)} style={st("align-self: flex-start; height: 32px; padding: 0 12px; border: 0; border-radius: 10px; background: #0F766E; color: #FFFFFF; font: 500 13px Inter, sans-serif; cursor: pointer;")}>Create campaign</button>
       </>
     );

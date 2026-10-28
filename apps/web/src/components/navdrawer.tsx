@@ -55,8 +55,7 @@ export function NavMenu() {
               <button className="press gh" type="button" aria-label="Close menu" onClick={() => setOpen(false)} style={st("width: 32px; height: 32px; border: 0; background: transparent; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center;")}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#333333" strokeWidth="1.5" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
             </div>
             <div style={st("padding: 12px; display: flex; flex-direction: column; gap: 16px;")}>
-              <div style={st("display: flex; align-items: center; gap: 8px; padding: 0 4px;")}>
-                <WalletButton align="left" />
+              <div style={st("display: flex; align-items: center; padding: 0 4px;")}>
                 <span style={{ flex: 1 }} />
                 <ThemeToggle />
               </div>
@@ -77,7 +76,8 @@ export function NavMenu() {
               ))}
             </div>
             <div style={{ flex: 1 }} />
-            <p style={st("padding: 12px 16px; border-top: 1px solid #EBEBEB; font-size: 12px; line-height: 18px; color: #6B6B6B;")}>Devnet: nothing here moves real money.</p>
+            <div style={st("padding: 12px 16px 0; border-top: 1px solid #EBEBEB; display: flex;")}><WalletButton align="left" dropUp /></div>
+            <p style={st("padding: 10px 16px 12px; font-size: 12px; line-height: 18px; color: #6B6B6B;")}>Devnet: nothing here moves real money.</p>
           </nav>
         </>,
         document.body,

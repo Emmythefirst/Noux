@@ -34,12 +34,13 @@ export function AppSidebar({ ident, nav, extra, footer, label }: { ident: ReactN
 }
 
 /** Wallet address entry. There is no wallet connection yet: this only chooses whose public numbers to read. */
-export function WalletForm({ initial, onSubmit, label, example, onCancel, cancelLabel }: { initial: string; onSubmit: (a: string) => void; label: string; example?: { label: string; address: string }; onCancel?: () => void; cancelLabel?: string }) {
+export function WalletForm({ initial, onSubmit, label, example, onCancel, cancelLabel, onBack }: { initial: string; onSubmit: (a: string) => void; label: string; example?: { label: string; address: string }; onCancel?: () => void; cancelLabel?: string; onBack?: () => void }) {
   const [v, setV] = useState(initial);
   const ok = isPubkey(v);
   const go = (e: FormEvent) => { e.preventDefault(); if (ok) onSubmit(v); };
   return (
     <form onSubmit={go} style={st("border: 1px solid #EBEBEB; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 12px; max-width: 640px;")}>
+      {onBack && <button type="button" onClick={onBack} className="press gh" style={st("align-self: flex-start; height: 28px; margin: -6px 0 0 -8px; padding: 0 10px 0 6px; border: 0; background: transparent; border-radius: 8px; color: #333333; font: 500 13px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;")}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>Back</button>}
       <label htmlFor="wallet-in" style={st("font-size: 14px; font-weight: 500; color: #111111;")}>{label}</label>
       <div style={st("display: flex; gap: 8px; flex-wrap: wrap;")}>
         <input id="wallet-in" className="mono" spellCheck={false} autoComplete="off" placeholder="Paste a Solana wallet address" value={v} onChange={(e) => setV(e.target.value.trim())} aria-invalid={v !== "" && !ok}
