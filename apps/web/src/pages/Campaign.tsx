@@ -6,7 +6,7 @@ import { CATEGORIES, bpsPct, dateOnly, dayTime, fmt2, fmtAmount, fmtShort, initi
 import { isPubkey, useWalletAddress } from "../lib/wallet";
 import { useWallet } from "../lib/wallet-connect";
 import { ListingModal } from "../components/listing-modal";
-import { Addr, openText, Disclosure, Dot, ErrorState, Page, SaleBadge, SampleBadge, TopNav, WakingBanner } from "../components/common";
+import { Addr, isUnderpaid, openText, Disclosure, Dot, ErrorState, Page, SaleBadge, SampleBadge, TopNav, WakingBanner } from "../components/common";
 
 const H2 = "font-size: 16px; line-height: 20px; letter-spacing: -0.01em; font-weight: 500; color: #111111;";
 const RING = "box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 1px 1px -.5px rgb(0 0 0 / .06), 0 3px 3px -1.5px rgb(0 0 0 / .06), 0 6px 6px -3px rgb(0 0 0 / .06), 0 12px 12px -6px rgb(0 0 0 / .06);";
@@ -242,7 +242,7 @@ export default function CampaignPage() {
                         <tr key={r.sale} className="rh" style={st("height: 40px;")}>
                           <td style={st("padding: 0 12px 0 16px; border-bottom: 1px solid #EBEBEB;")}><Link className="mono" to={`/r/${r.sale}`} style={st("font-size: 12px;")}>{short(r.sale)}</Link> <span className="tn" style={st("font-size: 12px; color: #6B6B6B; margin-left: 6px;")}>{dayTime(r.settledAt ?? r.openedAt)}</span></td>
                           <td className="mono" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; font-size: 12px; color: #333333;")}>{short(r.parties.distributor)}</td>
-                          <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB;")}><SaleBadge status={r.status} text={r.status === "open" ? openText(r, left) : undefined} /></td>
+                          <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB;")}><SaleBadge status={r.status} warn={isUnderpaid(r)} text={r.status === "open" ? openText(r, left) : undefined} /></td>
                           <td className="tn" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right; color: #111111;")}>{fmtAmount(r.status === "open" ? r.vaultAmount : r.gross, r.decimals)}</td>
                           <td className="tn" style={st("padding: 0 16px 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right; color: #111111;")}>{r.status === "refunded" ? "—" : fmtAmount(r.split.distributor, r.decimals)}</td>
                         </tr>

@@ -92,3 +92,6 @@ h2[id],h3[id],section[id]{scroll-margin-top:84px}
 
 /* dark mode: card shadows are black-on-black, so give raised cards a hairline instead */
 :root[data-theme="dark"] article{box-shadow:0 0 0 1px rgba(255,255,255,.08) !important}
+
+/* dark mode: the fixed black merchant segment would vanish on a near-black page, so give it a hairline (colours themselves never change) */
+:root[data-theme="dark"] [style*="--c-111112"]{box-shadow:0 0 0 1px rgba(255,255,255,.38)}

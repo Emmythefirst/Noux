@@ -36,8 +36,8 @@ export const STATUS_COLORS = {
   refunded: { bg: "#FFF1D6", fg: "#8A4B00", dot: "#8A4B00", label: "Refunded" },
 } as const;
 
-export function SaleBadge({ status, text, dot = false }: { status: keyof typeof STATUS_COLORS; text?: string; dot?: boolean }) {
-  const c = STATUS_COLORS[status];
+export function SaleBadge({ status, text, dot = false, warn = false }: { status: keyof typeof STATUS_COLORS; text?: string; dot?: boolean; warn?: boolean }) {
+  const c = warn ? STATUS_COLORS.refunded : STATUS_COLORS[status];
   return (
     <span style={{ ...st("height: 20px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; white-space: nowrap; gap: 6px;"), background: c.bg, color: c.fg }}>
       {dot && <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: 9999, background: c.dot }} />}
@@ -47,8 +47,13 @@ export function SaleBadge({ status, text, dot = false }: { status: keyof typeof 
 }
 
 /** An open sale with nothing paid into its vault yet is "awaiting payment", not "held". */
-export function openText(r: { funded: boolean }, leftSecs: number): string {
+/** The vault holds money but less than the claim price: the program refuses to settle it (Underpaid); only the merchant can refund it. */
+export function isUnderpaid(r: { status: string; funded: boolean; vaultAmount: string; price: string }): boolean {
+  return r.status === "open" && r.funded && BigInt(r.vaultAmount) < BigInt(r.price);
+}
+export function openText(r: { funded: boolean; status?: string; vaultAmount?: string; price?: string }, leftSecs: number): string {
   if (!r.funded) return "Awaiting payment";
+  if (r.vaultAmount !== undefined && r.price !== undefined && BigInt(r.vaultAmount) < BigInt(r.price)) return "Underpaid · can’t settle";
   return leftSecs > 0 ? `Held · ${mmssLocal(leftSecs)} left` : "Ready to settle";
 }
 const mmssLocal = (s: number) => `${Math.floor(Math.ceil(s) / 60)}:${String(Math.ceil(s) % 60).padStart(2, "0")}`;

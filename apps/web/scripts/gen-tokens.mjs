@@ -12,6 +12,9 @@ const DARK = {
   "#ffe8e6": "#3b1411", "#b42318": "#f87171", "#d92d20": "#ef4444",
   "#e6f0ff": "#0f2238", "#0058b0": "#60a5fa", "#b3d4ff": "#1e3a5f",
   "#1c1c1c": "#1c1c1c", "#2b2b2b": "#2b2b2b",
+  // Split-bar colours are FIXED in both themes (the design says they never change): these are visually identical twins of
+  // #111111 / #0f766e / #d4d4d8 / #ffffff used only for the merchant / distributor / fee segments and the text on them.
+  "#111112": "#111112", "#0f766f": "#0f766f", "#d4d4d9": "#d4d4d9", "#fffffe": "#fffffe",
 };
 const root = path.resolve(import.meta.dirname, "../src");
 const found = new Set();

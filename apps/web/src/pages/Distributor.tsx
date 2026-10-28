@@ -6,7 +6,7 @@ import { bpsPct, dayTime, fmt2, fmtAmount, mmss, short } from "../lib/format";
 import { isPubkey, useWalletAddress } from "../lib/wallet";
 import { useWallet } from "../lib/wallet-connect";
 import { ViewingBar, WalletForm } from "../components/appshell";
-import { ErrorState, Page, SampleBadge, TopNav, WakingBanner } from "../components/common";
+import { isUnderpaid, ErrorState, Page, SampleBadge, TopNav, WakingBanner } from "../components/common";
 
 const H2 = "font-size: 16px; line-height: 20px; letter-spacing: -0.01em; font-weight: 500; color: #111111;";
 const SAMPLE_DISTRIBUTOR = "A84GL1aExB8hVTdVHYs5P4wgSaj5tnxZMPoqwdBUZxUo"; // the Noux demo buyer-agent's distributor wallet
@@ -62,7 +62,7 @@ export default function Distributor() {
 
     const m = info.metrics;
     const recent = info.recent;
-    const heldSales = recent.filter((r) => r.status === "open" && r.funded);
+    const heldSales = recent.filter((r) => r.status === "open" && r.funded && !isUnderpaid(r)); // an underpaid sale will never settle, so it is not "pending"
     const heldTotal = heldSales.reduce((a, r) => a + BigInt(expected(r)), 0n);
     const next = heldSales.map((r) => (r.holdUntil ? new Date(r.holdUntil).getTime() : 0)).filter(Boolean).sort((a, b) => a - b)[0];
     const leftSecs = next ? (next - now) / 1000 : 0;
@@ -227,7 +227,7 @@ export default function Distributor() {
                 const icon = s === "settled" ? ["M20 6 9 17l-5-5", "#0E7A2F", "#CAFACE"] : s === "open" ? ["M12 7v5l3 2", "#0058B0", "#E6F0FF"] : ["M18 6 6 18M6 6l12 12", "#6B6B6B", "#F4F4F5"];
                 const left = s === "open" && r.holdUntil ? (new Date(r.holdUntil).getTime() - now) / 1000 : 0;
                 const nm = camps.get(r.campaign)?.listing?.name ?? short(r.campaign);
-                const title = s === "settled" ? `${nm} sale settled` : s === "open" ? (!r.funded ? `${nm} sale awaiting payment` : `${nm} sale held · ${left > 0 ? "settles in " + mmss(left) : "ready to settle"}`) : `${nm} sale refunded`;
+                const title = s === "settled" ? `${nm} sale settled` : s === "open" ? (!r.funded ? `${nm} sale awaiting payment` : isUnderpaid(r) ? `${nm} sale underpaid: it can’t settle` : `${nm} sale held · ${left > 0 ? "settles in " + mmss(left) : "ready to settle"}`) : `${nm} sale refunded`;
                 return (
                   <li key={r.sale} className="rh" style={st("display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid #EBEBEB;")}>
                     <span aria-hidden="true" style={{ ...st("width: 28px; height: 28px; border-radius: 9999px; display: flex; align-items: center; justify-content: center;"), background: icon[2] }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={icon[1]} strokeWidth="2"><path d={icon[0]} /></svg></span>

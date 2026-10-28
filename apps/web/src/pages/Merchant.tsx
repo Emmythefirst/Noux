@@ -14,7 +14,7 @@ import { ThemeToggle } from "../lib/theme";
 import { SettingsPanel } from "./Settings";
 import { isPubkey, useWalletAddress } from "../lib/wallet";
 import { AppSidebar, ViewingBar, WalletForm } from "../components/appshell";
-import { openText, DevnetBadge, Dot, ErrorState, Freshness, SampleBadge, SaleBadge, WakingBanner } from "../components/common";
+import { isUnderpaid, openText, DevnetBadge, Dot, ErrorState, Freshness, SampleBadge, SaleBadge, WakingBanner } from "../components/common";
 
 const H2 = "font-size: 16px; line-height: 20px; letter-spacing: -0.01em; font-weight: 500; color: #111111;";
 const SAMPLE_MERCHANT = "4Gb6hyx49dTZN1p1dagrcJne5tYNxYqaDXJZVkb29nT7"; // the Noux demo merchant wallet
@@ -147,9 +147,9 @@ function CreateSheet({ onClose, onCreated }: { onClose: () => void; onCreated: (
           <div style={st("border: 1px solid #EBEBEB; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; background: #FAFAFA;")}>
             <span style={st("font-size: 13px; font-weight: 500; color: #111111;")}>On one 0.10 USDC sale</span>
             <div aria-hidden="true" style={st("display: flex; gap: 3px; height: 24px;")}>
-              <div className="seg-live" style={{ ...st("flex-basis: 0; background: #111111; border-radius: 6px 3px 3px 6px;"), flexGrow: m }} />
-              <div className="seg-live" style={{ ...st("flex-basis: 0; min-width: 3px; background: #0F766E; border-radius: 3px;"), flexGrow: c }} />
-              <div style={st("flex: 0 0 6px; background: #D4D4D8; border-radius: 3px 6px 6px 3px;")} />
+              <div className="seg-live" style={{ ...st("flex-basis: 0; background: #111112; border-radius: 6px 3px 3px 6px;"), flexGrow: m }} />
+              <div className="seg-live" style={{ ...st("flex-basis: 0; min-width: 3px; background: #0F766F; border-radius: 3px;"), flexGrow: c }} />
+              <div style={st("flex: 0 0 6px; background: #D4D4D9; border-radius: 3px 6px 6px 3px;")} />
             </div>
             <dl className="tn" style={st("margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; font-size: 12px;")}>
               <div><dt style={st("color: #6B6B6B;")}>You keep</dt><dd style={st("margin: 0; font-size: 14px; font-weight: 500; color: #111111;")}>{f(m)}</dd></div>
@@ -329,7 +329,7 @@ export default function Merchant() {
                               <td style={st("padding: 0 12px 0 16px; border-bottom: 1px solid #EBEBEB; white-space: nowrap;")}><Link className="mono" to={`/r/${r.sale}`} style={st("font-size: 12px;")}>{short(r.sale)}</Link><span className="tn" style={st("font-size: 12px; color: #6B6B6B; margin-left: 8px;")}>{dayTime(r.settledAt ?? r.openedAt)}</span></td>
                               <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; color: #111111; white-space: nowrap;")}>{nameOf(r.campaign)}</td>
                               <td className="mono" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; font-size: 12px; color: #333333; white-space: nowrap;")}>{short(r.parties.distributor)}</td>
-                              <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB;")}><SaleBadge status={r.status} text={r.status === "open" ? openText(r, left) : undefined} /></td>
+                              <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB;")}><SaleBadge status={r.status} warn={isUnderpaid(r)} text={r.status === "open" ? openText(r, left) : undefined} /></td>
                               <td className="tn" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right; color: #111111;")}>{fmtAmount(r.status === "open" ? r.vaultAmount : r.gross, r.decimals)}</td>
                               <td className="tn" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right; color: #111111;")}>{r.status === "refunded" ? "—" : r.status === "open" ? <span style={st("color: #6B6B6B;")} title="What it will pay if it settles">{r.funded ? fmtAmount(projectedSplit(r.vaultAmount, r.policy.commissionBps, r.policy.feeBps).distributor, r.decimals) : "—"}</span> : fmtAmount(r.split.distributor, r.decimals)}</td>
                               <td style={st("padding: 0 16px 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right;")}>
@@ -495,9 +495,9 @@ export default function Merchant() {
             {volume > 0n && (
               <section aria-labelledby="w-h" style={st("border: 1px solid #EBEBEB; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px;")}>
                 <div style={st("display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: baseline;")}><h2 id="w-h" style={st(H2)}>Where {fmt2(volume)} USDC went</h2><span style={st("font-size: 12px; color: #6B6B6B;")}>Settled sales{sales.items.length >= 100 ? " (latest 100 per campaign)" : ""}</span></div>
-                <div aria-hidden="true" style={st("display: flex; gap: 4px; height: 12px;")}><div style={{ ...st("background: #111111; border-radius: 6px 3px 3px 6px;"), flex: parts[0] }} /><div style={{ ...st("background: #0F766E; border-radius: 3px;"), flex: parts[1] }} /><div style={{ ...st("background: #D4D4D8; border-radius: 3px 6px 6px 3px;"), flex: `0 0 ${Math.max(6, (parts[2] / Number(volume)) * 100)}%` }} /></div>
+                <div aria-hidden="true" style={st("display: flex; gap: 4px; height: 12px;")}><div style={{ ...st("background: #111112; border-radius: 6px 3px 3px 6px;"), flex: parts[0] }} /><div style={{ ...st("background: #0F766F; border-radius: 3px;"), flex: parts[1] }} /><div style={{ ...st("background: #D4D4D9; border-radius: 3px 6px 6px 3px;"), flex: `0 0 ${Math.max(6, (parts[2] / Number(volume)) * 100)}%` }} /></div>
                 <dl className="tn" style={st("margin: 0; display: flex; flex-wrap: wrap; gap: 12px 40px; font-size: 13px;")}>
-                  {[["You kept", "#111111", "#111111", kept], ["Distributors", "#0F766E", "#0F766E", comm], ["Protocol fee", "#D4D4D8", "#111111", fees]].map(([k, sw, fg, v]) => (
+                  {[["You kept", "#111112", "#111111", kept], ["Distributors", "#0F766F", "#0F766E", comm], ["Protocol fee", "#D4D4D9", "#111111", fees]].map(([k, sw, fg, v]) => (
                     <div key={k as string} style={st("display: flex; align-items: center; gap: 8px;")}><span aria-hidden="true" style={{ ...st("width: 10px; height: 6px; border-radius: 2px;"), background: sw as string }} /><dt style={st("color: #6B6B6B;")}>{k as string}</dt><dd style={{ ...st("margin: 0; font-weight: 500;"), color: fg as string }}>{fmtAmount(v as bigint)} USDC</dd></div>
                   ))}
                 </dl>

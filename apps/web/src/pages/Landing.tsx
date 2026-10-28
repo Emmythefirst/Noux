@@ -10,8 +10,8 @@ const H2 = "font-size: clamp(2rem, 1.4rem + 2vw, 2.75rem); line-height: 1.05; le
 const SECTION = "max-width: 1280px; margin: 0 auto; padding: 128px clamp(16px, 4vw, 48px) 0;";
 const CARD_SHADOW = "box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 1px 2px -1px rgb(0 0 0 / .06), 0 2px 4px 0 rgb(0 0 0 / .04);";
 
-/** A real devnet sale (0.10 USDC, 15% commission, 1% fee). The hero shows its exact numbers and links to its public receipt. */
-const HERO_SALE = { address: "AjpAUxR7X5HPGaKdRaFZ9CwSumPZ5pt1gxkp6EjfcKFx", short: "AjpA…cKFx", distributor: "A84G…ZxUo" };
+/** A real devnet sale through the enforced-fee demo campaign (0.10 USDC, 15% commission, 1% protocol fee). The hero shows its exact numbers and links to its public receipt. */
+const HERO_SALE = { address: "8ALa3fArDxTfGKrNoRbAUChE9P4ApFs3xc3XHiWMy9HS", short: "8ALa…y9HS", distributor: "A84G…ZxUo" };
 
 const PRICES = [30000, 100000, 1000000, 5000000];
 const PRICE_LABELS = ["0.03 USDC", "0.10 USDC", "1.00 USDC", "5.00 USDC"];
@@ -51,15 +51,15 @@ function Simulator() {
         </div>
       </div>
       <div style={st("display: flex; gap: 4px; height: 44px;")} aria-hidden="true">
-        <div className="seg-live" style={{ ...st("flex-basis: 0; min-width: 0; background: #111111; border-radius: 8px 4px 4px 8px;"), flexGrow: Math.max(m, 1) }} />
-        <div className="seg-live" style={{ ...st("flex-basis: 0; min-width: 4px; background: #0F766E; border-radius: 4px;"), flexGrow: Math.max(c, 0) }} />
-        <div style={st("flex: 0 0 8px; background: #D4D4D8; border-radius: 4px 8px 8px 4px;")} />
+        <div className="seg-live" style={{ ...st("flex-basis: 0; min-width: 0; background: #111112; border-radius: 8px 4px 4px 8px;"), flexGrow: Math.max(m, 1) }} />
+        <div className="seg-live" style={{ ...st("flex-basis: 0; min-width: 4px; background: #0F766F; border-radius: 4px;"), flexGrow: Math.max(c, 0) }} />
+        <div style={st("flex: 0 0 8px; background: #D4D4D9; border-radius: 4px 8px 8px 4px;")} />
       </div>
       <dl className="tn" style={st("margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;")}>
         {[
-          ["Merchant", "#111111", "#111111", f(m)],
-          ["Distributor", "#0F766E", "#0F766E", f(c)],
-          ["Protocol fee", "#D4D4D8", "#111111", f(fee)],
+          ["Merchant", "#111112", "#111111", f(m)],
+          ["Distributor", "#0F766F", "#0F766E", f(c)],
+          ["Protocol fee", "#D4D4D9", "#111111", f(fee)],
         ].map(([label, sw, fg, amt]) => (
           <div key={label} style={st("display: flex; flex-direction: column; gap: 4px;")}>
             <dt style={st("font-size: 12px; color: #6B6B6B; display: flex; align-items: center; gap: 6px;")}><span aria-hidden="true" style={{ ...st("width: 10px; height: 6px; border-radius: 2px;"), background: sw }} />{label}</dt>
@@ -138,18 +138,18 @@ export default function Landing() {
 
               <div style={st("position: relative; height: 56px;")}>
                 <div className="seg-in" style={st("display: flex; gap: 4px; height: 56px;")}>
-                  <div style={st("flex: 84 1 0; min-width: 0; background: #111111; border-radius: 10px 4px 4px 10px; display: flex; align-items: center; padding: 0 14px; color: #FFFFFF; font-size: 13px; font-weight: 500;")}>Merchant · 84%</div>
-                  <div style={st("flex: 15 1 0; min-width: 64px; background: #0F766E; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #FFFFFF; font-size: 13px; font-weight: 500;")}>15%</div>
-                  <div style={st("flex: 1 1 0; min-width: 10px; background: #D4D4D8; border-radius: 4px 10px 10px 4px;")} />
+                  <div style={st("flex: 84 1 0; min-width: 0; background: #111112; border-radius: 10px 4px 4px 10px; display: flex; align-items: center; padding: 0 14px; color: #FFFFFE; font-size: 13px; font-weight: 500;")}>Merchant · 84%</div>
+                  <div style={st("flex: 15 1 0; min-width: 64px; background: #0F766F; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #FFFFFE; font-size: 13px; font-weight: 500;")}>15%</div>
+                  <div style={st("flex: 1 1 0; min-width: 10px; background: #D4D4D9; border-radius: 4px 10px 10px 4px;")} />
                 </div>
-                <div className="unite" aria-hidden="true" style={st("position: absolute; inset: 0; background: #111111; border-radius: 10px;")} />
+                <div className="unite" aria-hidden="true" style={st("position: absolute; inset: 0; background: #111112; border-radius: 10px;")} />
               </div>
 
               <dl style={st("margin: 0; display: flex; flex-direction: column;")}>
                 {[
-                  ["lab-in", "#111111", <>Merchant</>, "84.00%", "0.084000", "#111111", "border-bottom: 1px solid #EBEBEB;"],
-                  ["lab-in2", "#0F766E", <>Distributor <span className="mono" style={st("font-size: 12px; color: #6B6B6B;")}>{HERO_SALE.distributor}</span></>, "15.00%", "0.015000", "#0F766E", "border-bottom: 1px solid #EBEBEB;"],
-                  ["lab-in3", "#D4D4D8", <>Protocol fee</>, "1.00%", "0.001000", "#111111", ""],
+                  ["lab-in", "#111112", <>Merchant</>, "84.00%", "0.084000", "#111111", "border-bottom: 1px solid #EBEBEB;"],
+                  ["lab-in2", "#0F766F", <>Distributor <span className="mono" style={st("font-size: 12px; color: #6B6B6B;")}>{HERO_SALE.distributor}</span></>, "15.00%", "0.015000", "#0F766E", "border-bottom: 1px solid #EBEBEB;"],
+                  ["lab-in3", "#D4D4D9", <>Protocol fee</>, "1.00%", "0.001000", "#111111", ""],
                 ].map(([cls, sw, name, pct, amt, color, border], i) => (
                   <div key={i} className={cls as string} style={st("display: grid; grid-template-columns: 14px 1fr auto auto; gap: 12px; align-items: center; height: 40px; " + border)}>
                     <span aria-hidden="true" style={{ ...st("width: 14px; height: 8px; border-radius: 2px;"), background: sw as string }} />
@@ -210,7 +210,7 @@ export default function Landing() {
               <span className="mono" style={st("font-size: 11px; letter-spacing: 0.08em; color: #6B6B6B;")}>04 · PROGRAM</span>
               <h3 style={st("font-size: 20px; line-height: 26px; letter-spacing: -0.015em; font-weight: 500; color: #111111;")}>Splits and leaves a receipt</h3>
               <p style={st("font-size: 14px; line-height: 20px; color: #6B6B6B;")}>After the hold, the program pays merchant, distributor and fee in one settlement.</p>
-              <div aria-hidden="true" style={st("margin-top: 12px; display: flex; gap: 3px; height: 10px;")}><div style={st("flex: 84; background: #111111; border-radius: 3px;")} /><div style={st("flex: 15; background: #0F766E; border-radius: 3px;")} /><div style={st("flex: 2; background: #D4D4D8; border-radius: 3px;")} /></div>
+              <div aria-hidden="true" style={st("margin-top: 12px; display: flex; gap: 3px; height: 10px;")}><div style={st("flex: 84; background: #111112; border-radius: 3px;")} /><div style={st("flex: 15; background: #0F766F; border-radius: 3px;")} /><div style={st("flex: 2; background: #D4D4D9; border-radius: 3px;")} /></div>
             </li>
           </ol>
         </section>
@@ -264,7 +264,7 @@ export default function Landing() {
                 ))}
               </ol>
               <div style={st("border-top: 1px solid #EBEBEB; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px;")}>
-                <div aria-hidden="true" style={st("display: flex; gap: 3px; height: 8px;")}><div style={st("flex: 84; background: #111111; border-radius: 3px;")} /><div style={st("flex: 15; background: #0F766E; border-radius: 3px;")} /><div style={st("flex: 2; background: #D4D4D8; border-radius: 3px;")} /></div>
+                <div aria-hidden="true" style={st("display: flex; gap: 3px; height: 8px;")}><div style={st("flex: 84; background: #111112; border-radius: 3px;")} /><div style={st("flex: 15; background: #0F766F; border-radius: 3px;")} /><div style={st("flex: 2; background: #D4D4D9; border-radius: 3px;")} /></div>
                 <div style={st("display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 13px;")}><span style={st("color: #6B6B6B;")}>Settles after the campaign’s hold</span><Link to={`/r/${HERO_SALE.address}`} style={st("font-weight: 500;")}>Receipt {HERO_SALE.short} ↗</Link></div>
               </div>
             </figure>

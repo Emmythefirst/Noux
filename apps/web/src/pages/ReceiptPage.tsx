@@ -4,7 +4,7 @@ import { st } from "../lib/css";
 import { ApiError, explorerAddr, useApi, useCopy, useNow, type Campaign, type Receipt } from "../lib/api";
 import { verifyReceipt, type StepState } from "../lib/verify";
 import { fmtAmount, fullUtc, mmss, short, pctOf, projectedSplit } from "../lib/format";
-import { openText, Addr, CopyIcon, Disclosure, ErrorState, Page, SampleBadge, STATUS_COLORS, TopNav, WakingBanner } from "../components/common";
+import { isUnderpaid, openText, Addr, CopyIcon, Disclosure, ErrorState, Page, SampleBadge, STATUS_COLORS, TopNav, WakingBanner } from "../components/common";
 
 const RING = "box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 1px 1px -.5px rgb(0 0 0 / .06), 0 3px 3px -1.5px rgb(0 0 0 / .06), 0 6px 6px -3px rgb(0 0 0 / .06), 0 12px 12px -6px rgb(0 0 0 / .06);";
 const dot = (c: string, filled: boolean) => st("width: 12px; height: 12px; margin-top: 4px; border-radius: 9999px; flex: none; " + (filled ? `background: ${c};` : `background: #FFFFFF; border: 2px solid ${c};`));
@@ -107,7 +107,8 @@ export default function ReceiptPage() {
   const held = r.status === "open";
   const refunded = r.status === "refunded";
   const settled = r.status === "settled";
-  const sc = STATUS_COLORS[r.status];
+  const under = isUnderpaid(r);
+  const sc = under ? STATUS_COLORS.refunded : STATUS_COLORS[r.status];
   const left = held && r.holdUntil ? (new Date(r.holdUntil).getTime() - now) / 1000 : 0;
   const statusText = held ? openText(r, left) : sc.label;
   const name = r.listing?.name ?? "Unlisted campaign";
@@ -117,26 +118,26 @@ export default function ReceiptPage() {
   const pct = (v: string) => pctOf(v, g).toFixed(2) + "%";
   const sumLine = refunded
     ? `${f(g)} returned to ${short(r.parties.buyer)} · no commission paid`
-    : `${held ? "Will pay out: " : ""}${f(split.merchant)} + ${f(split.distributor)} + ${f(split.protocolFee)} = ${f(g)} USDC · fee and commission rounded down, merchant gets the remainder`;
+    : `${under ? "Underpaid, so it will not pay out. At this amount it would split: " : held ? "Will pay out: " : ""}${f(split.merchant)} + ${f(split.distributor)} + ${f(split.protocolFee)} = ${f(g)} USDC · fee and commission rounded down, merchant gets the remainder`;
 
-  const segBase = "min-width: 0; display: flex; align-items: center; color: #FFFFFF; ";
-  const pend: CSSProperties = held ? { backgroundImage: "repeating-linear-gradient(135deg, rgba(255,255,255,.14) 0 7px, transparent 7px 14px)", backgroundSize: "28px 80px" } : {};
+  const segBase = "min-width: 0; display: flex; align-items: center; color: #FFFFFE; "; // fixed white: the segments keep their colours in dark mode
+  const pend: CSSProperties = held && !under ? { backgroundImage: "repeating-linear-gradient(135deg, rgba(255,255,255,.14) 0 7px, transparent 7px 14px)", backgroundSize: "28px 80px" } : {};
   const mFlex = Number(split.merchant), dFlex = Number(split.distributor), fFlex = Number(split.protocolFee);
 
   type Part = { name: string; pct: string; addr: string | null; amt: string; swatch: string; color: string; anim: string };
   const parts: Part[] = refunded ? [
     { name: "Buyer refund", pct: "100.00%", addr: r.parties.buyer, amt: f(g), swatch: "width: 16px; height: 10px; border-radius: 3px; border: 1px dashed #8A8A8A; background: #F4F4F5;", color: "#111111", anim: "l1" },
-    { name: "Distributor", pct: "no commission", addr: r.parties.distributor, amt: f("0"), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #0F766E; opacity: .3;", color: "#6B6B6B", anim: "l2" },
-    { name: "Merchant", pct: "no payout", addr: r.parties.merchant, amt: f("0"), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #111111; opacity: .3;", color: "#6B6B6B", anim: "l3" },
+    { name: "Distributor", pct: "no commission", addr: r.parties.distributor, amt: f("0"), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #0F766F; opacity: .3;", color: "#6B6B6B", anim: "l2" },
+    { name: "Merchant", pct: "no payout", addr: r.parties.merchant, amt: f("0"), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #111112; opacity: .3;", color: "#6B6B6B", anim: "l3" },
   ] : [
-    { name: "Merchant", pct: pct(split.merchant), addr: r.parties.merchant, amt: f(split.merchant), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #111111;", color: "#111111", anim: "l1" },
-    { name: "Distributor", pct: pct(split.distributor), addr: r.parties.distributor, amt: f(split.distributor), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #0F766E;", color: "#0F766E", anim: "l2" },
-    { name: "Protocol fee", pct: pct(split.protocolFee), addr: r.parties.feeOwner ?? null, amt: f(split.protocolFee), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #D4D4D8;", color: "#111111", anim: "l3" },
+    { name: "Merchant", pct: pct(split.merchant), addr: r.parties.merchant, amt: f(split.merchant), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #111112;", color: "#111111", anim: "l1" },
+    { name: "Distributor", pct: pct(split.distributor), addr: r.parties.distributor, amt: f(split.distributor), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #0F766F;", color: "#0F766E", anim: "l2" },
+    { name: "Protocol fee", pct: pct(split.protocolFee), addr: r.parties.feeOwner ?? null, amt: f(split.protocolFee), swatch: "width: 16px; height: 10px; border-radius: 3px; background: #D4D4D9;", color: "#111111", anim: "l3" },
   ];
 
   const unpaid = held && !r.funded;
-  const lastTitle = unpaid ? "Waiting for payment" : held ? "Settles after the hold" : refunded ? "Refunded by merchant" : "Settled";
-  const lastMeta = held
+  const lastTitle = under ? "Underpaid: can’t settle" : unpaid ? "Waiting for payment" : held ? "Settles after the hold" : refunded ? "Refunded by merchant" : "Settled";
+  const lastMeta = under ? `The vault holds ${f(r.vaultAmount)} of the ${f(r.price)} claim price. The program refuses to settle an underpaid sale; only the merchant can refund it.` : held
     ? `${left > 0 ? mmss(left) + " left · " : ""}anyone can settle after ${fullUtc(r.holdUntil)}`
     : refunded ? `${fullUtc(r.settledAt)} · inside the hold`
     : `${fullUtc(r.settledAt)}${r.holdUntil && r.settledAt && new Date(r.settledAt) > new Date(r.holdUntil) ? ` · ${Math.round((new Date(r.settledAt).getTime() - new Date(r.holdUntil).getTime()) / 1000)} s after the hold ended` : ""}`;
@@ -188,11 +189,11 @@ export default function ReceiptPage() {
               {!refunded && (
                 <div style={st("position: relative; height: 80px;")}>
                   <div className="seg-in" style={st("display: flex; gap: 6px; height: 80px;")}>
-                    <div style={{ ...st(segBase + "background-color: #111111; border-radius: 14px 6px 6px 14px; padding: 0 20px; justify-content: space-between; gap: 8px;"), flex: `${mFlex} 1 0`, ...pend }}><span style={st("font-size: 14px; font-weight: 500;")}>Merchant</span><span className="tn" style={st("font-size: 13px; opacity: .8;")}>{pctOf(split.merchant, g).toFixed(0)}%</span></div>
-                    <div style={{ ...st(segBase + "min-width: 72px; background-color: #0F766E; border-radius: 6px; justify-content: center;"), flex: `${dFlex} 1 0`, ...pend }}><span className="tn" style={st("font-size: 14px; font-weight: 500;")}>{pctOf(split.distributor, g).toFixed(0)}%</span></div>
-                    <div style={{ ...st("min-width: 14px; background: #D4D4D8; border-radius: 6px 14px 14px 6px;"), flex: `${Math.max(fFlex, 1)} 1 0` }} />
+                    <div style={{ ...st(segBase + "background-color: #111112; border-radius: 14px 6px 6px 14px; padding: 0 20px; justify-content: space-between; gap: 8px;"), flex: `${mFlex} 1 0`, ...pend }}><span style={st("font-size: 14px; font-weight: 500;")}>Merchant</span><span className="tn" style={st("font-size: 13px; opacity: .8;")}>{pctOf(split.merchant, g).toFixed(0)}%</span></div>
+                    <div style={{ ...st(segBase + "min-width: 72px; background-color: #0F766F; border-radius: 6px; justify-content: center;"), flex: `${dFlex} 1 0`, ...pend }}><span className="tn" style={st("font-size: 14px; font-weight: 500;")}>{pctOf(split.distributor, g).toFixed(0)}%</span></div>
+                    <div style={{ ...st("min-width: 14px; background: #D4D4D9; border-radius: 6px 14px 14px 6px;"), flex: `${Math.max(fFlex, 1)} 1 0` }} />
                   </div>
-                  <div className="unite" aria-hidden="true" style={st("position: absolute; inset: 0; background: #111111; border-radius: 14px;")} />
+                  <div className="unite" aria-hidden="true" style={st("position: absolute; inset: 0; background: #111112; border-radius: 14px;")} />
                 </div>
               )}
               {refunded && (
