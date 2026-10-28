@@ -19,7 +19,13 @@ export interface SaleSettler {
 export class AnchorChain implements SaleOpener, SaleSettler {
   private program: anchor.Program;
   private inflight = new Map<string, Promise<PublicKey>>();
-  constructor(private o: { connection: Connection; programId: PublicKey; mint: PublicKey; gatewayPayer: Keypair; merchant?: Keypair; log?: (m: string, d?: unknown) => void }) {
+  /** sale -> claim expiry (s) for sales this process opened or found open: the paid retry of the same request skips an RPC read. A sale can only be closed AFTER its claim expired, so an entry is valid until then. */
+  private opened = new Map<string, number>();
+  /** merchant / fee wallet of a campaign never change after creation: one fetch per campaign, not one per settle. */
+  private campaigns = new Map<string, any>();
+  private campaignInfo = async (pk: PublicKey) => { const k = pk.toBase58(); let c = this.campaigns.get(k); if (!c) { c = await (this.program.account as any).campaign.fetch(pk); this.campaigns.set(k, c); } return c; };
+  private now = () => Math.floor(Date.now() / 1000);
+  constructor(private o: { connection: Connection; programId: PublicKey; mint: PublicKey; gatewayPayer: Keypair; merchant?: Keypair; log?: (m: string, d?: unknown) => void; /** how long a finished open stays shared with concurrent identical requests (default 5000) */ inflightWindowMs?: number }) {
     const provider = new anchor.AnchorProvider(o.connection, new anchor.Wallet(o.gatewayPayer), { commitment: "confirmed" });
     this.program = new anchor.Program(idl as anchor.Idl, provider);
   }
@@ -30,8 +36,10 @@ export class AnchorChain implements SaleOpener, SaleSettler {
     const k = sale.toBase58();
     // Concurrent requests carrying the same claim (unpaid + paid, retries) share ONE open transaction.
     const existing = this.inflight.get(k); if (existing) return existing;
+    if ((this.opened.get(k) ?? 0) > this.now()) return Promise.resolve(sale);
+    const remember = () => { this.opened.set(k, c.expiry); if (this.opened.size > 10_000) for (const [key, exp] of this.opened) if (exp <= this.now()) this.opened.delete(key); };
     const p = (async () => {
-      if (await this.o.connection.getAccountInfo(sale, "confirmed")) return sale;
+      if (await this.o.connection.getAccountInfo(sale, "confirmed")) { remember(); return sale; }
       await this.program.methods.openSale([...c.nonce], new anchor.BN(c.expiry), new anchor.BN(c.price.toString()))
         .accounts({
           payer: this.o.gatewayPayer.publicKey, campaign: c.campaign, distributor: c.distributor, buyer: c.buyer, mint: this.o.mint, sale,
@@ -40,8 +48,9 @@ export class AnchorChain implements SaleOpener, SaleSettler {
         })
         .preInstructions([Ed25519Program.createInstructionWithPublicKey({ publicKey: c.attributionKey.toBytes(), message: c.message, signature: c.signature })])
         .rpc();
+      remember();
       return sale;
-    })().finally(() => setTimeout(() => this.inflight.delete(k), 5_000));
+    })().finally(() => setTimeout(() => this.inflight.delete(k), this.o.inflightWindowMs ?? 5_000));
     this.inflight.set(k, p);
     return p;
   }
@@ -50,7 +59,7 @@ export class AnchorChain implements SaleOpener, SaleSettler {
 
   async settle(c: SignedClaim): Promise<string | null> {
     const m = this.merchantKey(); const sale = salePda(this.o.programId, c.campaign, c.nonce);
-    const camp: any = await (this.program.account as any).campaign.fetch(c.campaign);
+    const camp: any = await this.campaignInfo(c.campaign);
     const pre = [m.publicKey, c.distributor, camp.feeOwner].map((o: PublicKey) => createAssociatedTokenAccountIdempotentInstruction(this.o.gatewayPayer.publicKey, this.ata(o), o, this.o.mint));
     return this.program.methods.settleSale().accounts({
       caller: m.publicKey, campaign: c.campaign, sale, saleVault: this.ata(sale), merchantAta: this.ata(camp.merchant), distributorAta: this.ata(c.distributor),
