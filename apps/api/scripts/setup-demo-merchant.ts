@@ -57,7 +57,8 @@ const lines = [
   `RPC_URL=${env.RPC_URL}`, `PROGRAM_ID=${PROGRAM.toBase58()}`, "CLUSTER=devnet", `CAMPAIGN=${campaign.toBase58()}`, `MINT=${USDC.toBase58()}`,
   `MERCHANT_PAYTO=${merchant.publicKey.toBase58()}`, `GATEWAY_PAYER_B58=${bs58.encode(payer.secretKey)}`, `MERCHANT_SIGNER_B58=${bs58.encode(merchant.secretKey)}`,
   "FACILITATOR=cdp", `CDP_API_KEY_ID=${env.CDP_API_KEY_ID}`, `CDP_API_KEY_SECRET=${env.CDP_API_KEY_SECRET}`,
-  `CDP_API_KEY_SECRET_HEX=${Buffer.from(env.CDP_API_KEY_SECRET, "utf8").toString("hex")}`, // hex survives any paste/parser; the service prefers it `CLAIMS_API_URL=${API_URL}`, `PUBLIC_URL=${DEMO_URL}`,
+  `CDP_API_KEY_SECRET_HEX=${Buffer.from(env.CDP_API_KEY_SECRET, "utf8").toString("hex")}`, // hex survives any paste/parser; the service prefers it
+  `CLAIMS_API_URL=${API_URL}`, `PUBLIC_URL=${DEMO_URL}`,
 ];
 if (!process.argv.includes("--no-env")) fs.writeFileSync(path.join(ROOT, ".env.render.merchant"), lines.join("\n") + "\n", { mode: 0o600 }); // --no-env: local test runs must not overwrite the deploy file with localhost URLs
 
