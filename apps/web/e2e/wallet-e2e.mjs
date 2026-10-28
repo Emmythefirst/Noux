@@ -94,6 +94,9 @@ rec("the funded sale offers a Refund action (index saw the vault balance)", (awa
 await page.getByRole("button", { name: "Refund", exact: true }).first().click();
 await page.getByRole("alertdialog").getByRole("button", { name: "Refund sale" }).click();
 await page.waitForSelector("text=Sale refunded", { timeout: 90000 }).catch(() => {});
+// the row must flip to Refunded by itself: no page reload (the bug seen on the live site: it stayed "Held" with its countdown)
+const flipped = await page.locator("tbody").getByText("Refunded", { exact: true }).first().waitFor({ timeout: 60000 }).then(() => true).catch(() => false);
+rec("sales table shows Refunded without a reload (not Held)", flipped && (await page.locator("tbody").getByText(/Held/).count()) === 0);
 rec("refund: wallet approved, toast shown", await page.getByText("Sale refunded").isVisible().catch(() => false), (await page.getByRole("alert").allInnerTexts().catch(() => [])).join(" | "));
 await sleep(2000);
 const acc = await conn.getAccountInfo(new PublicKey(sale), "confirmed");

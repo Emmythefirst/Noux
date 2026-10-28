@@ -33,18 +33,29 @@ type Tab = "all" | "open" | "settled" | "refunded";
 
 function useMerchantSales(addresses: string[]) {
   const key = addresses.join(",");
+  const [tick, setTick] = useState(0);
   const [state, setState] = useState<{ loading: boolean; error: boolean; items: Receipt[] }>({ loading: addresses.length > 0, error: false, items: [] });
+  // sales the merchant just refunded: shown as Refunded at once, until the (up to ~60 s behind) index reports it too
+  const [refunded, setRefunded] = useState<Record<string, true>>({});
   useEffect(() => {
     if (addresses.length === 0) { setState({ loading: false, error: false, items: [] }); return; }
     let live = true;
-    setState((s) => ({ ...s, loading: true, error: false }));
-    Promise.all(addresses.map((a) => apiGet<ApiPage<Receipt>>(`/campaigns/${a}/sales?limit=100`)))
+    setState((s) => ({ ...s, loading: s.items.length === 0, error: false })); // a refresh keeps showing the current rows
+    Promise.all(addresses.map((a) => apiGet<ApiPage<Receipt>>(`/campaigns/${a}/sales?limit=100`, undefined, tick > 0)))
       .then((pages) => { if (live) setState({ loading: false, error: false, items: pages.flatMap((p) => p.items).sort((a, b) => +new Date(b.settledAt ?? b.openedAt ?? 0) - +new Date(a.settledAt ?? a.openedAt ?? 0)) }); })
-      .catch(() => { if (live) setState({ loading: false, error: true, items: [] }); });
+      .catch(() => { if (live) setState((s) => ({ loading: false, error: s.items.length === 0, items: s.items })); });
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-  return state;
+  }, [key, tick]);
+  const refetch = () => setTick((t) => t + 1);
+  // keep statuses current without a reload: poll while anything is open (the keeper may settle it; a refund must show up)
+  const anyOpen = state.items.some((x) => x.status === "open");
+  useEffect(() => { if (!anyOpen) return; const t = setInterval(refetch, 15_000); return () => clearInterval(t); }, [anyOpen]);
+  // forget an override once the index agrees
+  useEffect(() => { const gone = Object.keys(refunded).filter((a) => state.items.find((x) => x.sale === a)?.status !== "open"); if (gone.length) setRefunded((r) => { const n = { ...r }; gone.forEach((a) => delete n[a]); return n; }); }, [state.items, refunded]);
+  const items = useMemo(() => state.items.map((x) => (refunded[x.sale] && x.status === "open" ? { ...x, status: "refunded" as const, refunded: true, gross: x.vaultAmount, vaultAmount: "0", funded: true } : x)), [state.items, refunded]);
+  const markRefunded = (sale: string) => { setRefunded((r) => ({ ...r, [sale]: true })); refetch(); [3000, 10000, 25000, 50000].forEach((ms) => setTimeout(refetch, ms)); };
+  return { ...state, items, refetch, markRefunded };
 }
 
 interface ClaimService { attributionKey: string; cluster: string; programId: string; claimTtlSecs: number }
@@ -549,7 +560,7 @@ export default function Merchant() {
         <main style={st("padding: 28px clamp(16px, 3vw, 32px) 64px; display: flex; flex-direction: column; gap: 28px; max-width: 1240px; width: 100%;")}>{body}</main>
       </div>
       {creating && <CreateSheet onClose={() => setCreating(false)} onCreated={(c) => { setCreating(false); list.retry(); setToast({ text: "Campaign created and listed. The directory updates within a minute.", to: `/campaigns/${c}` }); }} />}
-      {confirm && <RefundDialog sale={confirm} merchant={mine.find((c) => c.address === confirm.campaign)?.merchant ?? null} onClose={() => setConfirm(null)} onDone={(r) => { setConfirm(null); list.retry(); setToast({ text: `Sale refunded. The buyer has ${fmtAmount(r.vaultAmount !== "0" ? r.vaultAmount : r.gross, r.decimals)} USDC back.`, to: `/r/${r.sale}` }); }} />}
+      {confirm && <RefundDialog sale={confirm} merchant={mine.find((c) => c.address === confirm.campaign)?.merchant ?? null} onClose={() => setConfirm(null)} onDone={(r) => { setConfirm(null); list.retry(); sales.markRefunded(r.sale); setToast({ text: `Sale refunded. The buyer has ${fmtAmount(r.vaultAmount !== "0" ? r.vaultAmount : r.gross, r.decimals)} USDC back.`, to: `/r/${r.sale}` }); }} />}
       {toast && (
         <div className="toast" role="status" style={st("position: fixed; z-index: 70; right: 24px; bottom: 24px; max-width: calc(100% - 48px); background: #111111; color: #FFFFFF; border-radius: 12px; padding: 12px 16px; font-size: 14px; display: flex; align-items: center; gap: 12px; box-shadow: 0 12px 24px -8px rgb(0 0 0 / .3);")}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5EEAD4" strokeWidth="2" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
