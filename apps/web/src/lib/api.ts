@@ -62,12 +62,13 @@ export class ApiError extends Error {
 const TIMEOUT_MS = 65_000;
 const WAKING_AFTER_MS = 2_500;
 
-export async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
+/** `fresh` bypasses the browser cache (the API allows a few seconds of caching: right after a write the old copy must not come back). */
+export async function apiGet<T>(path: string, signal?: AbortSignal, fresh = false): Promise<T> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
   signal?.addEventListener("abort", () => ctl.abort(), { once: true });
   try {
-    const r = await fetch(API_BASE + path, { signal: ctl.signal });
+    const r = await fetch(API_BASE + path, { signal: ctl.signal, cache: fresh ? "reload" : "default" });
     if (!r.ok) {
       let msg = `HTTP ${r.status}`;
       try { msg = ((await r.json()) as any)?.error?.message ?? msg; } catch { /* keep default */ }
@@ -94,7 +95,7 @@ export function useApi<T>(path: string | null): Fetched<T> {
     const ctl = new AbortController();
     setLoading(true); setError(null); setWaking(false);
     const w = setTimeout(() => { if (seq.current === mine) setWaking(true); }, WAKING_AFTER_MS);
-    apiGet<T>(path, ctl.signal)
+    apiGet<T>(path, ctl.signal, tick > 0) // a retry (after an error or a write) must not be served from cache
       .then((d) => { if (seq.current === mine) { setData(d); setLoading(false); setWaking(false); } })
       .catch((e: Error) => {
         if (ctl.signal.aborted || seq.current !== mine) return; // superseded or unmounted

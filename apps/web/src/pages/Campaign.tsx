@@ -5,6 +5,7 @@ import { ApiError, explorerAddr, useApi, useCopy, useIndexFreshness, useNow, typ
 import { CATEGORIES, bpsPct, dateOnly, dayTime, fmt2, fmtAmount, fmtShort, initials, mmss, short } from "../lib/format";
 import { isPubkey, useWalletAddress } from "../lib/wallet";
 import { useWallet } from "../lib/wallet-connect";
+import { ListingModal } from "../components/listing-modal";
 import { Addr, openText, Disclosure, Dot, ErrorState, Page, SaleBadge, SampleBadge, TopNav, WakingBanner } from "../components/common";
 
 const H2 = "font-size: 16px; line-height: 20px; letter-spacing: -0.01em; font-weight: 500; color: #111111;";
@@ -94,6 +95,7 @@ export default function CampaignPage() {
   const fresh = useIndexFreshness();
   const now = useNow(1000);
   const me = useWallet().address;
+  const [listing, setListing] = useState(false);
   const c = camp.data;
   const chart = useMemo(() => dailyCounts(sales.data?.items ?? [], Date.now()), [sales.data]);
 
@@ -142,7 +144,7 @@ export default function CampaignPage() {
                 {l?.isSample && <SampleBadge />}
                 <span style={st("height: 20px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; " + (spent ? "background: #FFF1D6; color: #8A4B00;" : "background: #CAFACE; color: #0E7A2F;"))}><Dot color={spent ? "#8A4B00" : "#15B042"} />{spent ? "Budget spent" : "Active"}</span>
               </div>
-              <p style={st("font-size: 14px; line-height: 20px; color: #333333; max-width: 560px;")}>{l ? `${l.description} ${CATEGORIES[l.category] ?? ""}.` : "This campaign has no signed listing, so it isn’t shown in the directory."}</p>
+              <p style={st("font-size: 14px; line-height: 20px; color: #333333; max-width: 560px;")}>{l ? `${l.description} ${CATEGORIES[l.category] ?? ""}.` : "This campaign is unlisted: its merchant hasn’t published a listing, so it isn’t in the directory. Anyone with the link can still see it. Only promote it if you know and trust the merchant."}</p>
               <div style={st("display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: #6B6B6B; align-items: center;")}>
                 <span>Merchant <Addr value={c.merchant} copy style={{ color: "#333333" }} /></span>
                 <span>Campaign <Addr value={c.address} copy style={{ color: "#333333" }} /></span>
@@ -151,6 +153,7 @@ export default function CampaignPage() {
             </div>
           </div>
           <div style={st("display: flex; gap: 8px; flex-wrap: wrap;")}>
+          {me && me === c.merchant && <button className="press bs" type="button" onClick={() => setListing(true)} style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 14px Inter, sans-serif; cursor: pointer;")}>{c.listing ? "Edit listing" : "List this campaign"}</button>}
           {me && me === c.merchant && <Link className="press bs" to="/app/merchant" style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center;")}>Manage in merchant console</Link>}
           <a className="press bp" href="#promote" style={st("height: 40px; padding: 0 16px; border-radius: 10px; background: #0F766E; color: #FFFFFF; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 8px;")}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1" /><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" /></svg>Get referral link
@@ -287,6 +290,7 @@ export default function CampaignPage() {
           </aside>
         </div>
 
+        {listing && c && <ListingModal campaign={c.address} existing={c.listing} onClose={() => setListing(false)} onDone={() => { setListing(false); camp.retry(); }} />}
         <Disclosure text={c.disclosure} style={{ borderTop: "1px solid #EBEBEB", paddingTop: 24 }} />
       </main>
     </Page>

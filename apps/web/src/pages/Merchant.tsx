@@ -8,6 +8,7 @@ import { campaignPda, createCampaignIx, listingMessage, newTx, parseAmount, refu
 import { getBlockhash, useWallet } from "../lib/wallet-connect";
 import { RPC_URL } from "../lib/verify";
 import { WalletButton } from "../components/wallet-ui";
+import { publishListing } from "../lib/publish-listing";
 import { NavMenu } from "../components/navdrawer";
 import { ThemeToggle } from "../lib/theme";
 import { SettingsPanel } from "./Settings";
@@ -93,18 +94,10 @@ function CreateSheet({ onClose, onCreated }: { onClose: () => void; onCreated: (
       const campaign = campaignPda(merchant, id).toBase58();
       const listing = { name: name.trim(), description: desc.trim(), category: cat, endpointUrl: url.trim(), route: route.trim(), displayPrice: price.trim(), isSample: false };
       setStep("Sign the listing message in your wallet…");
-      const ts = Math.floor(Date.now() / 1000);
-      const sig = await w.signMessage(await listingMessage(campaign, listing, ts));
-      setStep("Publishing the listing…");
       let last = "";
-      for (let i = 0; i < 6; i++) { // the index reads the new campaign from the chain; give it a few seconds
-        const r = await fetch(`${API_BASE}/campaigns/${campaign}/listing`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ listing, ts, signature: btoa(String.fromCharCode(...sig)) }) });
-        if (r.ok) { onCreated(campaign); return; }
-        last = ((await r.json().catch(() => null)) as any)?.error?.message ?? `HTTP ${r.status}`;
-        if (r.status !== 404) break;
-        await new Promise((res) => setTimeout(res, 2000));
-      }
-      throw new Error(`The campaign was created on-chain (${short(campaign)}), but publishing the listing failed: ${last}`);
+      try { await publishListing(campaign, listing, w.signMessage); onCreated(campaign); return; }
+      catch (e) { last = (e as Error).message; }
+      throw new Error(`The campaign was created on-chain (${short(campaign)}), but publishing the listing failed: ${last}. Open the campaign page and use “List this campaign” to retry.`);
     } catch (e) { setErr((e as Error).message); setStep(null); }
   };
 
