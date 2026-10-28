@@ -4,6 +4,7 @@ import { st } from "../lib/css";
 import { ApiError, explorerAddr, useApi, useCopy, useIndexFreshness, useNow, type CampaignDetail, type Page as ApiPage, type Receipt } from "../lib/api";
 import { CATEGORIES, bpsPct, dateOnly, dayTime, fmt2, fmtAmount, fmtShort, initials, mmss, short } from "../lib/format";
 import { isPubkey, useWalletAddress } from "../lib/wallet";
+import { referralLink } from "../lib/buy";
 import { useWallet } from "../lib/wallet-connect";
 import { ListingModal } from "../components/listing-modal";
 import { Addr, isUnderpaid, openText, Disclosure, Dot, ErrorState, Page, SaleBadge, SampleBadge, TopNav, WakingBanner } from "../components/common";
@@ -35,7 +36,7 @@ function Promote({ c }: { c: CampaignDetail }) {
   const [copied, copy] = useCopy();
   const ok = isPubkey(wallet);
   const slug = (c.listing?.name ?? "campaign").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  const link = `https://noux.so/r/${ok ? wallet : "<your-wallet>"}/${slug}`;
+  const link = ok ? referralLink(c.address, wallet) : "Paste your wallet address above";
   return (
     <section id="promote" aria-labelledby="p-h" style={st("border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 16px; " + RING)}>
       <div style={st("display: flex; flex-direction: column; gap: 4px;")}>
@@ -67,12 +68,12 @@ function Promote({ c }: { c: CampaignDetail }) {
             <input id="ref" className="mono" readOnly value={link} style={st("flex: 1; min-width: 0; height: 40px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 8px; font-size: 12px; color: #111111; background: #FFFFFF;")} />
             <button className="press bs" type="button" disabled={!ok} onClick={() => copy("ref", link)} style={{ ...st("height: 40px; padding: 0 12px; border: 1px solid #D4D4D8; background: #FFFFFF; border-radius: 10px; font: 500 13px Inter, sans-serif; color: #111111; cursor: pointer; min-width: 76px;"), opacity: ok ? 1 : 0.5 }}>{copied === "ref" ? "Copied" : "Copy"}</button>
           </div>
-          <span style={st("font-size: 12px; color: #6B6B6B;")}>Preview: the <span className="mono">noux.so</span> link page isn’t live yet. Buyers can use this campaign today through the claim API (see “For agents”).</span>
+          <span style={st("font-size: 12px; color: #6B6B6B;")}>Anyone who opens it can pay for this service with a wallet. You are credited as the referrer and earn the commission when the sale settles. {ok && <a href={link} target="_blank" rel="noreferrer">Open the link ↗</a>}</span>
         </div>
       )}
       {tab === "agents" && (
         <div className="fadein" style={st("display: flex; flex-direction: column; gap: 8px;")}>
-          <span style={st("font-size: 13px; font-weight: 500; color: #333333;")}>Buyer signs a claim request, then calls with the claim</span>
+          <span style={st("font-size: 13px; font-weight: 500; color: #333333;")}>Outline of the steps</span>
           <pre className="mono" style={st("margin: 0; padding: 12px; background: #FAFAFA; border: 1px solid #EBEBEB; border-radius: 8px; font-size: 11px; line-height: 17px; color: #333333; overflow-x: auto;")}>{`POST /v1/claims   (signed by the buyer)
 campaign:    ${short(c.address)}
 distributor: ${ok ? short(wallet) : "<your-wallet>"}
@@ -80,6 +81,8 @@ buyer, price, ts, buyerSignature
 
 GET ${c.listing?.route.replace(/^GET /, "") ?? "<route>"}
 x-noux-claim: <claim>`}</pre>
+          <span style={st("font-size: 12px; color: #6B6B6B;")}>This is an outline, not code to paste: the buyer’s request has to be signed with a wallet key.</span>
+          <a href="https://github.com/Emmythefirst/Noux/blob/main/apps/api/scripts/demo-buy.ts" target="_blank" rel="noreferrer" style={st("font-size: 13px; font-weight: 500;")}>Run the working example ↗</a>
           <Link to="/docs/agents-and-claims" style={st("font-size: 13px; font-weight: 500;")}>Agent guide →</Link>
         </div>
       )}

@@ -38,7 +38,7 @@ Without a valid claim a call is a plain purchase: the merchant is paid in full a
 - Mainnet. Devnet only. A mainnet smoke test is planned before the deadline.
 - An independent audit. The program upgrade authority and the fee-config admin are each **one key** (disclosed on the site).
 - Pilot merchants. None yet.
-- A human buyer experience. Buyers today are agents or API clients that call the claim API and pay via x402; there is no consumer checkout page, and `noux.so` referral links shown in the UI are previews.
+- Real-money checkout. The buy page (`/buy/<campaign>?ref=<wallet>`) lets a person pay with a wallet, but only on devnet and only for GET endpoints that allow browser payments. There is no `noux.so` short domain.
 - Published packages. `@noux/gateway` is a workspace package, not on npm; the `npx noux …` commands in the docs page show intended names.
 - A commission budget that is escrowed. It is a **cap** (nothing is locked); there is no top-up instruction.
 - Abuse resistance beyond rate limits and public metrics: see [docs/security.md](docs/security.md) for what is and is not protected.

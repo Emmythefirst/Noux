@@ -27,6 +27,8 @@ export interface WalletCtx {
   /** Signs, sends and confirms. Returns the signature. Throws with a readable message (including "rejected"). */
   signAndSend: (tx: Transaction) => Promise<string>;
   signMessage: (msg: Uint8Array) => Promise<Uint8Array>;
+  /** Sign serialized transaction bytes without sending (the x402 payment: the facilitator pays the fee and submits it). */
+  signRaw: (tx: Uint8Array) => Promise<Uint8Array>;
 }
 const Ctx = createContext<WalletCtx | null>(null);
 export const useWallet = () => { const c = useContext(Ctx); if (!c) throw new Error("WalletProvider missing"); return c; };
@@ -99,6 +101,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch (e) { throw new Error(friendly(e)); }
   }, [account]);
 
+  const signRaw = useCallback(async (tx: Uint8Array) => {
+    if (!account) throw new Error("Connect a wallet first.");
+    try {
+      const f = (account.wallet.features as Feat)["solana:signTransaction"] as SolanaSignTransactionFeature["solana:signTransaction"];
+      const [out] = await f.signTransaction({ account: account.account, transaction: tx, chain: CHAIN });
+      return out.signedTransaction;
+    } catch (e) { throw new Error(friendly(e)); }
+  }, [account]);
+
   const signMessage = useCallback(async (msg: Uint8Array) => {
     if (!account) throw new Error("Connect a wallet first.");
     const f = (account.wallet.features as Feat)["solana:signMessage"] as SolanaSignMessageFeature["solana:signMessage"] | undefined;
@@ -108,8 +119,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<WalletCtx>(() => ({
     wallets, address: account ? account.account.address : null, walletName: account?.wallet.name ?? null,
-    connecting, error, connect: (w) => doConnect(w, false), disconnect, signAndSend, signMessage,
-  }), [wallets, account, connecting, error, doConnect, disconnect, signAndSend, signMessage]);
+    connecting, error, connect: (w) => doConnect(w, false), disconnect, signAndSend, signMessage, signRaw,
+  }), [wallets, account, connecting, error, doConnect, disconnect, signAndSend, signMessage, signRaw]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

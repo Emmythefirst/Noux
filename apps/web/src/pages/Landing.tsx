@@ -198,7 +198,7 @@ export default function Landing() {
               <span className="mono" style={st("font-size: 11px; letter-spacing: 0.08em; color: #6B6B6B;")}>02 · DISTRIBUTOR</span>
               <h3 style={st("font-size: 20px; line-height: 26px; letter-spacing: -0.015em; font-weight: 500; color: #111111;")}>Share a referral</h3>
               <p style={st("font-size: 14px; line-height: 20px; color: #6B6B6B;")}>A person or an agent shares the service. Their wallet address is their referral ID.</p>
-              <div className="mono" style={st("margin-top: 8px; font-size: 12px; color: #333333; background: #F4F4F5; border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere;")}>noux.so/r/9fQe…Lm3a/brief</div>
+              <div className="mono" style={st("margin-top: 8px; font-size: 12px; color: #333333; background: #F4F4F5; border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere;")}>noux.vercel.app/buy/GkNQ…Vjvt?ref=9fQe…Lm3a</div>
             </li>
             <li style={st("padding: 24px 24px 32px 24px; display: flex; flex-direction: column; gap: 12px; border-right: 1px solid #EBEBEB;")}>
               <span className="mono" style={st("font-size: 11px; letter-spacing: 0.08em; color: #6B6B6B;")}>03 · BUYER</span>

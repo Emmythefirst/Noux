@@ -34,7 +34,8 @@ export function createDemoApp(cfg: DemoAppConfig) {
   const gw = createNouxGateway({ ...cfg.gateway, routes: Object.fromEntries(Object.entries(ROUTES).map(([k, v]) => [k, { price: v.price, description: v.description }])) });
   const app = express();
   app.disable("x-powered-by");
-  app.use((_req, res, next) => { res.setHeader("x-content-type-options", "nosniff"); res.setHeader("access-control-allow-origin", "*"); res.setHeader("access-control-expose-headers", "payment-required, payment-response"); res.setHeader("access-control-allow-headers", `content-type, payment-signature, ${BRAND.claimHeader}`); next(); });
+  // CORS: the x402 browser client sends access-control-expose-headers as a REQUEST header, so the preflight must allow it
+  app.use((_req, res, next) => { res.setHeader("x-content-type-options", "nosniff"); res.setHeader("access-control-allow-origin", "*"); res.setHeader("access-control-expose-headers", "payment-required, payment-response"); res.setHeader("access-control-allow-headers", `content-type, payment-signature, x-payment, access-control-expose-headers, ${BRAND.claimHeader}`); next(); });
   app.options("*splat", (_q, r) => { r.status(204).end(); });
 
   // ---- free endpoints

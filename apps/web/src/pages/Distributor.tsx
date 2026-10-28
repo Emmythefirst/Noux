@@ -4,6 +4,7 @@ import { st } from "../lib/css";
 import { ApiError, useApi, useCopy, useNow, type Campaign, type DistributorInfo, type Page as ApiPage, type Receipt } from "../lib/api";
 import { bpsPct, dayTime, fmt2, fmtAmount, mmss, short } from "../lib/format";
 import { isPubkey, useWalletAddress } from "../lib/wallet";
+import { referralLink } from "../lib/buy";
 import { useWallet } from "../lib/wallet-connect";
 import { ViewingBar, WalletForm } from "../components/appshell";
 import { isUnderpaid, ErrorState, Page, SampleBadge, TopNav, WakingBanner } from "../components/common";
@@ -73,7 +74,7 @@ export default function Distributor() {
     const sel = campSel || shareList[0]?.address || "";
     const selC = camps.get(sel);
     const slug = (selC?.listing?.name ?? "campaign").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-    const link = `https://noux.so/r/${wallet}/${slug}`;
+    const link = sel ? referralLink(sel, wallet) : "";
     const heldByCamp = new Map<string, number>();
     heldSales.forEach((r) => heldByCamp.set(r.campaign, (heldByCamp.get(r.campaign) ?? 0) + 1));
     const closed = m.eligiblePurchases + m.refunded;
@@ -163,16 +164,16 @@ export default function Distributor() {
               </div>
               {fmtTab === "people" ? (
                 <div className="fadein" style={st("flex: 3 1 360px; display: flex; flex-direction: column; gap: 8px;")}>
-                  <label htmlFor="lnk" style={st("font-size: 13px; font-weight: 500; color: #333333;")}>Your link (preview)</label>
+                  <label htmlFor="lnk" style={st("font-size: 13px; font-weight: 500; color: #333333;")}>Your link</label>
                   <div style={st("display: flex; gap: 8px;")}>
                     <input id="lnk" className="mono" readOnly value={link} style={st("flex: 1; min-width: 0; height: 40px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 8px; font-size: 12px; color: #111111; background: #FAFAFA;")} />
                     <button className="press bp" type="button" onClick={() => copy("l", link)} style={st("height: 40px; padding: 0 14px; border: 0; background: #0F766E; border-radius: 10px; font: 500 13px Inter, sans-serif; color: #FFFFFF; cursor: pointer; min-width: 92px;")}>{copied === "l" ? "Copied" : "Copy link"}</button>
                   </div>
-                  <span style={st("font-size: 12px; color: #6B6B6B;")}>The <span className="mono">noux.so</span> link page isn’t live yet.</span>
+                  <span style={st("font-size: 12px; color: #6B6B6B;")}>Anyone who opens it can pay with a wallet and you are credited as the referrer. <a href={link} target="_blank" rel="noreferrer">Open the link ↗</a></span>
                 </div>
               ) : (
                 <div className="fadein" style={st("flex: 3 1 360px; display: flex; flex-direction: column; gap: 8px;")}>
-                  <span style={st("font-size: 13px; font-weight: 500; color: #333333;")}>Request a claim for a buyer (the buyer signs the request)</span>
+                  <span style={st("font-size: 13px; font-weight: 500; color: #333333;")}>Outline of the steps (the buyer signs the request)</span>
                   <pre className="mono" style={st("margin: 0; padding: 10px 12px; background: #FAFAFA; border: 1px solid #EBEBEB; border-radius: 8px; font-size: 12px; line-height: 18px; color: #333333; overflow-x: auto;")}>{`POST https://noux-api.onrender.com/v1/claims
 { "campaign": "${short(sel)}", "distributor": "${short(wallet)}",
   "buyer": "…", "price": "…", "ts": …, "buyerSignature": "…" }`}</pre>

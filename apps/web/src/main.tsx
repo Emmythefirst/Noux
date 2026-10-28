@@ -9,6 +9,7 @@ import CampaignPage from "./pages/Campaign";
 import ReceiptPage, { LatestReceipt } from "./pages/ReceiptPage";
 import Docs from "./pages/Docs";
 import Settings from "./pages/Settings";
+const Buy = lazy(() => import("./pages/Buy")); // pulls in the x402 client and the Solana library
 const Merchant = lazy(() => import("./pages/Merchant")); // pulls in the Solana library; keep it off the other pages
 import Distributor from "./pages/Distributor";
 import { Page, TopNav } from "./components/common";
@@ -53,6 +54,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/campaigns" element={<Directory />} />
           <Route path="/campaigns/:address" element={<CampaignPage />} />
           <Route path="/receipts" element={<LatestReceipt />} />
+          <Route path="/buy/:campaign" element={<Suspense fallback={null}><Buy /></Suspense>} />
           <Route path="/r/:sale" element={<ReceiptPage />} />
           <Route path="/docs" element={<Docs />} />
           <Route path="/docs/:slug" element={<Docs />} />

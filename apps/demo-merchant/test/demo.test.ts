@@ -85,6 +85,8 @@ describe("free endpoints", () => {
     const r = await fetch(url + "/healthz"); expect(r.headers.get("x-content-type-options")).toBe("nosniff"); expect(r.headers.get("x-powered-by")).toBeNull();
     const p = await fetch(url + "/sample/brief"); expect(p.headers.get("access-control-expose-headers")).toContain("payment-required");
     const o = await fetch(url + "/sample/brief", { method: "OPTIONS" }); expect(o.status).toBe(204); expect(o.headers.get("access-control-allow-headers")).toContain(BRAND.claimHeader);
+    // a browser buyer (the x402 fetch client) preflights with these request headers; a missing one makes the whole payment fail in the browser
+    for (const h of ["payment-signature", "access-control-expose-headers", "content-type"]) expect(o.headers.get("access-control-allow-headers")).toContain(h);
   });
 });
 

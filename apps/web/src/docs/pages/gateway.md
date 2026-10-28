@@ -42,6 +42,10 @@ app.use(gateway);                                        // your existing Expres
 - **Fails open for buyers.** If opening the sale fails, the buyer can still buy: you are paid in full and the referral is lost.
 - **A failed resource is not charged.** If your handler answers with an error status, nothing is settled.
 
+## Letting people buy from a browser
+
+Noux's buy page pays your route from the visitor's browser. For that your server must answer cross-origin requests: allow the request headers `content-type`, `payment-signature`, `x-payment`, `access-control-expose-headers` and `x-noux-claim`, and expose `payment-required` and `payment-response`. The sample merchant (`apps/demo-merchant/src/app.ts`) shows the exact headers. Without them, browsers block the payment and only API clients can buy.
+
 ## Claim rejection reasons
 
 `missing`, `too_large`, `malformed`, `tampered`, `wrong_program`, `wrong_cluster`, `wrong_campaign`, `wrong_attribution_key`, `price_mismatch`, `expiring` (less than 2 minutes of life left), `self_referral`. Each one results in a plain purchase and is reported through `onEvent`.
