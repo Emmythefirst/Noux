@@ -34,16 +34,16 @@ type Tab = "all" | "open" | "settled" | "refunded";
 function useMerchantSales(addresses: string[]) {
   const key = addresses.join(",");
   const [tick, setTick] = useState(0);
-  const [state, setState] = useState<{ loading: boolean; error: boolean; items: Receipt[] }>({ loading: addresses.length > 0, error: false, items: [] });
+  const [state, setState] = useState<{ loading: boolean; error: boolean; items: Receipt[]; incomplete: boolean }>({ loading: addresses.length > 0, error: false, items: [], incomplete: false });
   // sales the merchant just refunded: shown as Refunded at once, until the (up to ~60 s behind) index reports it too
   const [refunded, setRefunded] = useState<Record<string, true>>({});
   useEffect(() => {
-    if (addresses.length === 0) { setState({ loading: false, error: false, items: [] }); return; }
+    if (addresses.length === 0) { setState({ loading: false, error: false, items: [], incomplete: false }); return; }
     let live = true;
     setState((s) => ({ ...s, loading: s.items.length === 0, error: false })); // a refresh keeps showing the current rows
     Promise.all(addresses.map((a) => apiGet<ApiPage<Receipt>>(`/campaigns/${a}/sales?limit=100`, undefined, tick > 0)))
-      .then((pages) => { if (live) setState({ loading: false, error: false, items: pages.flatMap((p) => p.items).sort((a, b) => +new Date(b.settledAt ?? b.openedAt ?? 0) - +new Date(a.settledAt ?? a.openedAt ?? 0)) }); })
-      .catch(() => { if (live) setState((s) => ({ loading: false, error: s.items.length === 0, items: s.items })); });
+      .then((pages) => { if (live) setState({ loading: false, error: false, incomplete: pages.some((p) => p.total > p.items.length), items: pages.flatMap((p) => p.items).sort((a, b) => +new Date(b.settledAt ?? b.openedAt ?? 0) - +new Date(a.settledAt ?? a.openedAt ?? 0)) }); })
+      .catch(() => { if (live) setState((s) => ({ loading: false, error: s.items.length === 0, items: s.items, incomplete: s.incomplete })); });
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, tick]);
@@ -246,7 +246,7 @@ export default function Merchant() {
   const fresh = useIndexFreshness();
   const now = useNow(1000);
 
-  const list = useApi<ApiPage<Campaign>>(wallet ? "/campaigns?includeUnlisted=1&sort=newest&limit=100" : null);
+  const list = useApi<ApiPage<Campaign>>(wallet ? `/campaigns?includeUnlisted=1&sort=newest&limit=100&merchant=${wallet}` : null);
   const mine = useMemo(() => (list.data?.items ?? []).filter((c) => c.merchant === wallet), [list.data, wallet]);
   const shown = mine.slice(0, MAX_CAMPAIGNS);
   const sales = useMerchantSales(shown.map((c) => c.address));
@@ -327,7 +327,7 @@ export default function Merchant() {
                     })}
                   </div>}
                 </div>
-                <div style={st("border: 1px solid #EBEBEB; border-radius: 12px; overflow-x: auto;")}>
+                <div className="xscroll" style={st("border: 1px solid #EBEBEB; border-radius: 12px; overflow-x: auto;")}>
                   {sales.loading ? <p role="status" style={st("padding: 24px; font-size: 13px; color: #6B6B6B;")}>Loading sales…</p> : sales.error ? <p role="alert" style={st("padding: 24px; font-size: 13px; color: #B42318;")}>Couldn’t load sales.</p> : rs.length > 0 ? (
                     <table style={st("width: 100%; min-width: 760px; border-collapse: collapse; font-size: 14px;")}>
                       <thead><tr style={st("height: 40px; text-align: left;")}>
@@ -345,7 +345,7 @@ export default function Merchant() {
                               <td className="tn" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right; color: #111111;")}>{fmtAmount(r.status === "open" ? r.vaultAmount : r.gross, r.decimals)}</td>
                               <td className="tn" style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right; color: #111111;")}>{r.status === "refunded" ? "—" : r.status === "open" ? <span style={st("color: #6B6B6B;")} title="What it will pay if it settles">{r.funded ? fmtAmount(projectedSplit(r.vaultAmount, r.policy.commissionBps, r.policy.feeBps).distributor, r.decimals) : "—"}</span> : fmtAmount(r.split.distributor, r.decimals)}</td>
                               <td style={st("padding: 0 16px 0 12px; border-bottom: 1px solid #EBEBEB; text-align: right;")}>
-                                {r.status === "open" && r.funded && <button className="press bs" type="button" onClick={() => setConfirm(r)} style={st("height: 28px; padding: 0 10px; border: 1px solid #D4D4D8; background: #FFFFFF; border-radius: 8px; font: 500 12px Inter, sans-serif; color: #111111; cursor: pointer;")}>Refund</button>}
+                                {r.status === "open" && r.funded && <button className="press bs tap" type="button" onClick={() => setConfirm(r)} style={st("height: 28px; padding: 0 10px; border: 1px solid #D4D4D8; background: #FFFFFF; border-radius: 8px; font: 500 12px Inter, sans-serif; color: #111111; cursor: pointer;")}>Refund</button>}
                               </td>
                             </tr>
                           );
@@ -371,9 +371,9 @@ export default function Merchant() {
 
     const th = (h: string, right = false) => <th key={h} scope="col" style={st("padding: 0 12px; font-size: 12px; font-weight: 500; color: #6B6B6B; border-bottom: 1px solid #EBEBEB; white-space: nowrap; " + (right ? "text-align: right;" : "text-align: left;"))}>{h}</th>;
     const td = (c: React.ReactNode, o: { right?: boolean; mono?: boolean; strong?: boolean } = {}) => <td className={o.mono ? "mono tn" : "tn"} style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; white-space: nowrap; " + (o.right ? "text-align: right; " : "") + (o.mono ? "font-size: 12px; color: #333333;" : "color: #111111;") + (o.strong ? " font-weight: 500;" : ""))}>{c}</td>;
-    const tableWrap = (min: number, head: React.ReactNode, body: React.ReactNode) => <div style={st("border: 1px solid #EBEBEB; border-radius: 12px; overflow-x: auto;")}><table style={{ ...st("width: 100%; border-collapse: collapse; font-size: 14px;"), minWidth: min }}><thead><tr style={st("height: 40px;")}>{head}</tr></thead><tbody>{body}</tbody></table></div>;
+    const tableWrap = (min: number, head: React.ReactNode, body: React.ReactNode) => <div className="xscroll" style={st("border: 1px solid #EBEBEB; border-radius: 12px; overflow-x: auto;")}><table style={{ ...st("width: 100%; border-collapse: collapse; font-size: 14px;"), minWidth: min }}><thead><tr style={st("height: 40px;")}>{head}</tr></thead><tbody>{body}</tbody></table></div>;
     const note = (t: React.ReactNode) => <p style={st("font-size: 12px; line-height: 18px; color: #6B6B6B; max-width: 720px;")}>{t}</p>;
-    const truncated = sales.items.length >= 100 * Math.max(1, shown.length) || mine.length > MAX_CAMPAIGNS;
+    const truncated = sales.incomplete || mine.length > MAX_CAMPAIGNS || (!!list.data && list.data.total > list.data.items.length && list.data.items.every((c) => c.merchant === wallet)); // a campaign with more sales than we fetched, more campaigns than we show, or more than one page of them (the total is only meaningful once the API filtered by merchant)
 
     const campaignsView = (
       <>
@@ -552,7 +552,7 @@ export default function Merchant() {
       <div style={st("flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column;")}>
         <header style={st("height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 clamp(16px, 3vw, 32px); border-bottom: 1px solid #EBEBEB;")}>
           <NavMenu />
-          <nav aria-label="Breadcrumb" style={st("font-size: 13px; color: #6B6B6B; display: flex; gap: 8px;")}><Link to="/" style={st("color: #6B6B6B;")}>Noux</Link><span aria-hidden="true">/</span><span style={st("color: #111111;")}>Merchant · {SECTION_TITLE[section][0]}</span></nav>
+          <nav aria-label="Breadcrumb" style={st("font-size: 13px; color: #6B6B6B; display: flex; gap: 8px;")}><Link to="/" className="hide-xs" style={st("color: #6B6B6B;")}>Noux</Link><span className="hide-xs" aria-hidden="true">/</span><span style={st("color: #111111; white-space: nowrap;")}><span className="hide-xs">Merchant · </span>{SECTION_TITLE[section][0]}</span></nav>
           <span style={{ flex: 1 }} />
           <Freshness ageSeconds={fresh.info?.ageSeconds} fetchedAt={fresh.fetchedAt} now={fresh.now} error={fresh.error} />
           <WalletButton compact />

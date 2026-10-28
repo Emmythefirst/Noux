@@ -32,6 +32,9 @@ Status: devnet, **no independent audit**. Read this before putting real money ne
 
 - The website never sees a private key. Every transaction and message is approved in the user's wallet.
 - Receipt verification checks against a Solana node directly. It does not cover transactions that use address lookup tables.
+- Wallets must expose `solana:signTransaction` (the buy page needs it because the facilitator, not the wallet, submits the payment). Wallets that can only sign-and-send are not listed.
+- Claim requests are plain text signed with `signMessage`. A hardware wallet that cannot sign arbitrary text cannot request a claim.
+- Before signing, the site checks the wallet offers the site's network (devnet) and says so if not. For a payment it also checks the wallet signed exactly the transaction the site built; a wallet that adds its own instructions first (for example a safety guard) is refused with a clear message, because its signature would not match what the facilitator receives. Phantom on devnet passed this; **mainnet behaviour of any wallet is untested.**
 
 ## The gateway payer's SOL float
 
@@ -53,7 +56,7 @@ Status: devnet, **no independent audit**. Read this before putting real money ne
 - Per-IP rate limiting trusts the first `X-Forwarded-For` hop.
 - A commission budget is a cap, not escrow; there is no top-up and no campaign pause/close instruction.
 - Rust unit tests do not exist; the program is tested through TypeScript scripts against a local validator and devnet (22 + 13 + 13 checks, with mutation checks for the fee rules).
-- Real wallet coverage: create, list/edit, refund and a buy-page payment were confirmed with Phantom on devnet; other wallets are untested.
+- Real wallet coverage: create, list/edit, refund and a buy-page payment were confirmed with Phantom on devnet; Solflare, Backpack and every other wallet are untested (only a Wallet Standard mock was run), and so is anything on mainnet.
 - Untested at scale: the gateway against a real chain and facilitator under load (the concurrency tests use a fake chain and facilitator), the indexer and keeper beyond a few hundred sales (the indexer reads every Sale account each minute), and the merchant console on a phone-sized screen.
 
 ## Reporting

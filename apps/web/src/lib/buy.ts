@@ -2,6 +2,7 @@
 // Everything here runs in the browser; the wallet signs, nothing secret ever leaves it. Loaded lazily (it pulls in the x402 client and @solana/kit).
 import { API_BASE } from "./api";
 import { RPC_URL } from "./verify";
+import { assertWalletSignedSameMessage } from "./wallet-guards";
 
 export const referralLink = (campaign: string, wallet: string) => `${window.location.origin}/buy/${campaign}?ref=${wallet}`;
 
@@ -47,6 +48,7 @@ export async function payWithWallet(a: { url: string; claimHeader?: string; addr
     signTransactions: async (txs: readonly any[]) => Promise.all(txs.map(async (tx) => {
       const signed = dec.decode(await a.signRaw(new Uint8Array(enc.encode(tx))));
       const sig = (signed.signatures as Record<string, Uint8Array | null>)[a.address];
+      assertWalletSignedSameMessage(new Uint8Array(tx.messageBytes), new Uint8Array(signed.messageBytes));
       if (!sig) throw new Error("The wallet did not sign the payment.");
       return { [a.address]: sig } as any;
     })),

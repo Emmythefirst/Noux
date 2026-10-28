@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { st } from "../lib/css";
 import { isPubkey } from "../lib/wallet";
@@ -9,10 +9,17 @@ export interface NavItem { label: string; icon: string; count?: string; to?: str
 const NAV_ITEM = "height: 32px; padding: 0 8px; border-radius: 8px; display: flex; align-items: center; gap: 10px; font-size: 14px; ";
 
 export function AppSidebar({ ident, nav, extra, footer, label }: { ident: ReactNode; nav: NavItem[]; extra?: ReactNode; footer: ReactNode; label: string }) {
+  const navRef = useRef<HTMLElement>(null);
+  // On a phone the links are one scrolling row: bring the current section into view (scroll the row itself, never the page).
+  const currentLabel = nav.find((n) => n.current)?.label;
+  useEffect(() => {
+    const row = navRef.current, cur = row?.querySelector<HTMLElement>("[aria-current]");
+    if (row && cur && row.scrollWidth > row.clientWidth) row.scrollLeft = cur.offsetLeft - (row.clientWidth - cur.offsetWidth) / 2;
+  }, [currentLabel]);
   return (
-    <aside aria-label="App" style={st("flex: 1 1 240px; max-width: 100%; background: #FAFAFA; border-right: 1px solid #EBEBEB; padding: 12px; display: flex; flex-direction: column; gap: 16px;")}>
-      {ident}
-      <nav aria-label={label} style={st("display: flex; flex-direction: column; gap: 2px;")}>
+    <aside aria-label="App" className="app-sb" style={st("flex: 1 1 240px; max-width: 100%; background: #FAFAFA; border-right: 1px solid #EBEBEB; padding: 12px; display: flex; flex-direction: column; gap: 16px;")}>
+      <div className="sb-wrap sb-hide-sm">{ident}</div>
+      <nav ref={navRef} aria-label={label} className="app-sb-nav" style={st("display: flex; flex-direction: column; gap: 2px;")}>
         {nav.map((n) => {
           const inner = (
             <>
@@ -26,9 +33,9 @@ export function AppSidebar({ ident, nav, extra, footer, label }: { ident: ReactN
           return <span key={n.label} aria-disabled="true" title="Coming soon" style={st(NAV_ITEM + "color: #6B6B6B;")}>{inner}</span>;
         })}
       </nav>
-      {extra}
+      <div className="sb-wrap sb-hide-sm">{extra}</div>
       <div style={{ flex: 1 }} />
-      {footer}
+      <div className="sb-wrap sb-hide-sm">{footer}</div>
     </aside>
   );
 }
@@ -59,7 +66,7 @@ export function ViewingBar({ address, onChange, connected }: { address: string; 
   return (
     <div role="note" style={st("display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border: 1px solid #EBEBEB; border-radius: 10px; background: #FAFAFA; font-size: 13px; color: #333333;")}>
       <span>Showing the public numbers for <span className="mono" title={address} style={st("font-size: 12px;")}>{short(address)}</span>.{connected === address ? " This is your connected wallet." : connected ? " This isn’t your connected wallet, so you can’t act for it." : " Connect a wallet to act for it."}</span>
-      <button type="button" onClick={onChange} style={st("border: 0; background: none; padding: 0; color: #0F766E; font: 500 13px Inter, sans-serif; cursor: pointer;")}>Change address</button>
+      <button type="button" className="tap" onClick={onChange} style={st("border: 0; background: none; padding: 0; color: #0F766E; font: 500 13px Inter, sans-serif; cursor: pointer;")}>Change address</button>
     </div>
   );
 }

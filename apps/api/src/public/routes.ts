@@ -84,10 +84,11 @@ export function publicRoutes(d: PublicDeps) {
   /* ---------- directory ---------- */
   app.get("/campaigns", async (c) => {
     const q = z.object({ category: z.enum(LISTING_CATEGORIES).optional(), q: z.string().max(60).optional(), status: z.enum(["active", "budget_exhausted"]).optional(),
-      includeUnlisted: z.enum(["0", "1"]).default("0"), sort: z.enum(["newest", "commission", "volume"]).default("newest") }).merge(page).safeParse(c.req.query());
+      includeUnlisted: z.enum(["0", "1"]).default("0"), merchant: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).optional(), sort: z.enum(["newest", "commission", "volume"]).default("newest") }).merge(page).safeParse(c.req.query());
     if (!q.success) return bad(c, 400, "bad_request", "invalid query: " + q.error.issues.map((i) => i.path.join(".")).join(","));
     const p: any[] = []; const w: string[] = [];
     if (q.data.includeUnlisted === "0") w.push("l.campaign IS NOT NULL");
+    if (q.data.merchant) { p.push(q.data.merchant); w.push(`c.merchant = $${p.length}`); }
     if (q.data.category) { p.push(q.data.category); w.push(`l.category = $${p.length}`); }
     if (q.data.q) { p.push(`%${q.data.q.replace(/[%_\\]/g, (m) => "\\" + m)}%`); w.push(`(l.name ILIKE $${p.length} OR l.description ILIKE $${p.length})`); }
     if (q.data.status === "active") w.push("c.commission_budget > c.commission_spent");

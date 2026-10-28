@@ -117,6 +117,18 @@ describe("indexer sync", () => {
 
 describe("public API: directory", () => {
   beforeEach(async () => { await syncOnce(pool, chain); });
+  it("merchant filter: only that merchant's campaigns and the true total, however many other campaigns exist (the console must not page the whole platform)", async () => {
+    for (let i = 0; i < 120; i++) chain.snap.campaigns.push(camp({ address: kp(), merchant: kp() }));
+    await syncOnce(pool, chain);
+    const app = mkApp(), m = merchantKey.publicKey.toBase58();
+    const all = await get(app, "/v1/campaigns?includeUnlisted=1&limit=100");
+    expect(all.body.total).toBe(122); expect(all.body.items).toHaveLength(100); // the old client-side approach only ever saw this page
+    const mine = await get(app, `/v1/campaigns?includeUnlisted=1&merchant=${m}&limit=100`);
+    expect(mine.body.total).toBe(2); expect(mine.body.items).toHaveLength(2);
+    expect(mine.body.items.every((x: any) => x.merchant === m)).toBe(true);
+    expect((await get(app, "/v1/campaigns?merchant=not-a-key")).status).toBe(400);
+    expect((await get(app, `/v1/campaigns?includeUnlisted=1&merchant=${kp()}`)).body.total).toBe(0);
+  });
   it("lists only LISTED campaigns by default; includeUnlisted shows all", async () => {
     const app = mkApp();
     expect((await get(app, "/v1/campaigns")).body.items).toHaveLength(0);

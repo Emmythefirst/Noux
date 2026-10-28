@@ -6,7 +6,7 @@ snapshots the program's on-chain accounts about every 60 s (`INDEXER_INTERVAL_SE
 
 | Endpoint | What |
 |---|---|
-| `GET /v1/campaigns` | Directory. Only campaigns with a merchant-signed listing, unless `includeUnlisted=1`. Filters: `category`, `q`, `status=active\|budget_exhausted`, `sort=newest\|commission\|volume`, `limit` (1-100), `offset`. |
+| `GET /v1/campaigns` | Directory. Only campaigns with a merchant-signed listing, unless `includeUnlisted=1`. Filters: `category`, `q`, `status=active\|budget_exhausted`, `merchant=<wallet>`, `sort=newest\|commission\|volume`, `limit` (1-100), `offset`. `total` counts the filtered set. |
 | `GET /v1/campaigns/:address` | One campaign: terms, budget, listing, and **metrics** (settled/refunded/open, volume, commissions paid, protocol fees, distinct buyers & distributors, top-buyer share, top distributors). |
 | `GET /v1/campaigns/:address/sales` | Receipts of that campaign (`status` filter, paging). |
 | `GET /v1/receipts` / `GET /v1/receipts/:sale` | Public receipts: parties, price, exact split, policy applied (commission/fee bps, hold, **whether the budget cap reduced the commission**), refunded?, and explorer links for the open, x402 payment and settlement/refund transactions. |

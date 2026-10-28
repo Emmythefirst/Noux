@@ -5,6 +5,7 @@ import type { SolanaSignMessageFeature, SolanaSignTransactionFeature } from "@so
 import type { Transaction } from "@solana/web3.js";
 import { CHAIN } from "./chain";
 import { RPC_URL } from "./verify";
+import { chainProblem } from "./wallet-guards";
 
 // Wallet Standard: any wallet that registers itself (Phantom, Solflare, Backpack, ...) shows up here. No per-wallet code.
 const LAST = "noux.lastWallet";
@@ -88,6 +89,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const signAndSend = useCallback(async (tx: Transaction) => {
     if (!account) throw new Error("Connect a wallet first.");
+    const wrong = chainProblem(account.wallet.chains, account.account.chains, CHAIN); if (wrong) throw new Error(wrong);
     try {
       const f = (account.wallet.features as Feat)["solana:signTransaction"] as SolanaSignTransactionFeature["solana:signTransaction"];
       const [out] = await f.signTransaction({ account: account.account, transaction: tx.serialize({ requireAllSignatures: false, verifySignatures: false }), chain: CHAIN });
@@ -103,6 +105,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const signRaw = useCallback(async (tx: Uint8Array) => {
     if (!account) throw new Error("Connect a wallet first.");
+    const wrong = chainProblem(account.wallet.chains, account.account.chains, CHAIN); if (wrong) throw new Error(wrong);
     try {
       const f = (account.wallet.features as Feat)["solana:signTransaction"] as SolanaSignTransactionFeature["solana:signTransaction"];
       const [out] = await f.signTransaction({ account: account.account, transaction: tx, chain: CHAIN });

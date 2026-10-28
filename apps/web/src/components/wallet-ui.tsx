@@ -18,7 +18,7 @@ export function WalletModal({ onClose }: { onClose: () => void }) {
           <button className="press gh" type="button" onClick={onClose} aria-label="Close" style={st("width: 28px; height: 28px; border: 0; background: transparent; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center;")}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#333333" strokeWidth="1.5" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
         </div>
         {wallets.length === 0 ? (
-          <p style={st("font-size: 14px; line-height: 20px; color: #333333;")}>No Solana wallet was detected in this browser. Install one (for example Phantom or Solflare), reload this page and try again. Set the wallet to devnet.</p>
+          <p style={st("font-size: 14px; line-height: 20px; color: #333333;")}>No Solana wallet was detected in this browser. Install one (for example Phantom or Solflare), reload this page and try again. Set the wallet to devnet. Wallets that cannot sign a transaction without sending it (some hardware and mobile wallets) are not listed.</p>
         ) : (
           <ul style={st("list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px;")}>
             {wallets.map((w) => (
