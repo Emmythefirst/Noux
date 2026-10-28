@@ -246,7 +246,7 @@ export default function Merchant() {
         { label: "Receipts", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2V3zM9 8h6M9 12h6", to: "/receipts" },
         { label: "Budget", icon: "M3 7h18v12H3zM16 13h2M3 7l3-4h12l3 4" },
         { label: "Distributors", icon: "M16 19v-1a4 4 0 0 0-8 0v1M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" },
-        { label: "Settings", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12h2M18 12h2M12 4v2M12 18v2" },
+        { label: "Settings", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12h2M18 12h2M12 4v2M12 18v2", to: "/settings" },
       ]}
       extra={shown.length > 0 ? (
         <div style={st("display: flex; flex-direction: column; gap: 4px;")}>

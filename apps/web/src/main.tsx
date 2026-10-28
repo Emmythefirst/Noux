@@ -8,6 +8,7 @@ import Directory from "./pages/Directory";
 import CampaignPage from "./pages/Campaign";
 import ReceiptPage, { LatestReceipt } from "./pages/ReceiptPage";
 import Docs from "./pages/Docs";
+import Settings from "./pages/Settings";
 const Merchant = lazy(() => import("./pages/Merchant")); // pulls in the Solana library; keep it off the other pages
 import Distributor from "./pages/Distributor";
 import { Page, TopNav } from "./components/common";
@@ -17,7 +18,7 @@ import { ThemeProvider } from "./lib/theme";
 
 const TITLES: [RegExp, string][] = [
   [/^\/campaigns\/.+/, "Campaign · Noux"], [/^\/campaigns/, "Campaigns · Noux"], [/^\/r\//, "Receipt · Noux"], [/^\/receipts/, "Receipts · Noux"],
-  [/^\/docs/, "Quickstart · Noux docs"], [/^\/app\/merchant/, "Merchant overview · Noux"], [/^\/app\/earnings/, "Distributor earnings · Noux"],
+  [/^\/docs/, "Quickstart · Noux docs"], [/^\/settings/, "Settings · Noux"], [/^\/app\/merchant/, "Merchant overview · Noux"], [/^\/app\/earnings/, "Distributor earnings · Noux"],
 ];
 
 function Chrome({ children }: { children: React.ReactNode }) {
@@ -55,6 +56,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/r/:sale" element={<ReceiptPage />} />
           <Route path="/docs" element={<Docs />} />
           <Route path="/docs/quickstart" element={<Docs />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="/app/merchant" element={<Suspense fallback={null}><Merchant /></Suspense>} />
           <Route path="/app/earnings" element={<Distributor />} />
           <Route path="*" element={<NotFound />} />

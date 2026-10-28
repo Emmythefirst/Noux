@@ -64,7 +64,7 @@ export default function Distributor() {
         { label: "Campaigns", icon: "M4 6h16M4 12h16M4 18h10", to: "/campaigns" },
         { label: "Referral links", icon: "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1", to: "/app/earnings#links" },
         { label: "Receipts", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2V3zM9 8h6M9 12h6", to: "/receipts", count: info ? String(info.metrics.eligiblePurchases) : undefined },
-        { label: "Settings", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12h2M18 12h2M12 4v2M12 18v2" },
+        { label: "Settings", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12h2M18 12h2M12 4v2M12 18v2", to: "/settings" },
       ]}
       extra={
         <>

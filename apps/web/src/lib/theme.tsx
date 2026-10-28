@@ -6,11 +6,13 @@ const KEY = "noux.theme";
 const stored = (): Theme | null => { try { const v = localStorage.getItem(KEY); return v === "light" || v === "dark" ? v : null; } catch { return null; } };
 const system = (): Theme => (typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
 
-const Ctx = createContext<{ theme: Theme; toggle: () => void } | null>(null);
+export type Mode = Theme | "system";
+const Ctx = createContext<{ theme: Theme; mode: Mode; setMode: (m: Mode) => void; toggle: () => void } | null>(null);
 
 /** Stored choice wins; otherwise follow the OS. The <html data-theme> attribute is set early by a script in index.html to avoid a flash. */
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => stored() ?? system());
+  const [mode, setModeState] = useState<Mode>(() => stored() ?? "system");
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
   useEffect(() => { // follow the OS while the visitor hasn't chosen
     if (typeof matchMedia !== "function") return;
@@ -18,8 +20,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const on = () => { if (!stored()) setTheme(m.matches ? "dark" : "light"); };
     m.addEventListener("change", on); return () => m.removeEventListener("change", on);
   }, []);
-  const toggle = useCallback(() => setTheme((t) => { const n = t === "dark" ? "light" : "dark"; try { localStorage.setItem(KEY, n); } catch { /* storage may be blocked */ } return n; }), []);
-  return <Ctx.Provider value={{ theme, toggle }}>{children}</Ctx.Provider>;
+  const toggle = useCallback(() => setTheme((t) => { const n = t === "dark" ? "light" : "dark"; try { localStorage.setItem(KEY, n); } catch { /* storage may be blocked */ } setModeState(n); return n; }), []);
+  const setMode = useCallback((m: Mode) => {
+    try { if (m === "system") localStorage.removeItem(KEY); else localStorage.setItem(KEY, m); } catch { /* storage may be blocked */ }
+    setModeState(m); setTheme(m === "system" ? system() : m);
+  }, []);
+  return <Ctx.Provider value={{ theme, mode, setMode, toggle }}>{children}</Ctx.Provider>;
 }
 export const useTheme = () => { const c = useContext(Ctx); if (!c) throw new Error("ThemeProvider missing"); return c; };
 

@@ -21,6 +21,9 @@ const GROUPS: { title: string; items: { label: string; to: string; icon: string 
   { title: "Merchant", items: [
     { label: "Overview and campaigns", to: "/app/merchant", icon: "M3 12h4l3-8 4 16 3-8h4" },
   ] },
+  { title: "Account", items: [
+    { label: "Settings", to: "/settings", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12h2M18 12h2M12 4v2M12 18v2" },
+  ] },
 ];
 
 /** Hamburger + slide-in menu with every section of the product, so you never have to go back to the landing page to switch. */
