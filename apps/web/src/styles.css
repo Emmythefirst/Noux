@@ -67,6 +67,7 @@ h2[id],h3[id]{scroll-margin-top:80px}
 .ring{animation:ring 72s linear both}
 .scrim{animation:fade 220ms cubic-bezier(.23,1,.32,1) both}
 .sheet{animation:sheet 420ms cubic-bezier(.32,.72,0,1) both}
+.sheet-l{animation:sheet-l 420ms cubic-bezier(.32,.72,0,1) both}
 .dialog{animation:dialog 260ms cubic-bezier(.23,1,.32,1) both}
 .toast{animation:toast 260ms cubic-bezier(.32,.72,0,1) both}
 }
@@ -85,5 +86,6 @@ h2[id],h3[id]{scroll-margin-top:80px}
 @keyframes ring{from{stroke-dashoffset:24}to{stroke-dashoffset:56.5}}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 @keyframes sheet{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
+@keyframes sheet-l{from{transform:translateX(-40px);opacity:0}to{transform:none;opacity:1}}
 @keyframes dialog{from{transform:scale(.97);opacity:0}to{transform:none;opacity:1}}
 @keyframes toast{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}

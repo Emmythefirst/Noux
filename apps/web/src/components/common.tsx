@@ -4,6 +4,8 @@ import { st } from "../lib/css";
 import { short } from "../lib/format";
 import { explorerAddr, useCopy } from "../lib/api";
 import { WalletButton } from "./wallet-ui";
+import { NavMenu } from "./navdrawer";
+import { useWallet } from "../lib/wallet-connect";
 
 /** Fallback only: pages render the API's own `disclosure` string when they have it. */
 export const DISCLOSURE_FALLBACK =
@@ -83,12 +85,14 @@ export function Addr({ value, copy = false, explorer = false, style, head = 4, t
 
 /** Top navigation. `landing` has the marketing links; `app` pages show the shorter set. */
 export function TopNav({ variant = "app", surface = "#FFFFFF", cta = false }: { variant?: "landing" | "app"; surface?: "#FFFFFF" | "#FAFAFA"; cta?: boolean }) {
+  const w = useWallet();
   const rgba = surface === "#FFFFFF" ? "255,255,255,0.86" : "250,250,250,0.86";
   const link = ({ isActive }: { isActive: boolean }): CSSProperties => (isActive ? st("color: #111111; font-weight: 500;") : st("color: #6B6B6B;"));
   return (
     <header style={st(`position: sticky; top: 0; z-index: 20; background: rgba(${rgba}); backdrop-filter: saturate(180%) blur(12px); -webkit-backdrop-filter: saturate(180%) blur(12px); border-bottom: 1px solid #EBEBEB;`)}>
       <nav aria-label="Primary" style={st("max-width: 1280px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 48px); height: 60px; display: flex; align-items: center; gap: 32px;")}>
-        <Link to="/" aria-label="Noux home" style={st("display: flex; align-items: center; gap: 10px; color: #111111;")}>
+        {variant === "app" && <NavMenu />}
+        <Link to="/" aria-label="Noux home" style={st("display: flex; align-items: center; gap: 10px; color: #111111; margin-left: " + (variant === "app" ? "-16px" : "0") + ";")}>
           <Mark />
           <span style={st("font-size: 17px; font-weight: 600; letter-spacing: -0.03em;")}>noux</span>
         </Link>
@@ -103,7 +107,7 @@ export function TopNav({ variant = "app", surface = "#FFFFFF", cta = false }: { 
         {variant === "app" && <WalletButton compact />}
         {variant === "landing" && <Link className="nl hide-sm" to="/app/earnings" style={st("font-size: 14px; color: #6B6B6B;")}>Open app</Link>}
         {(variant === "landing" || cta) && (
-          <Link className="press bi" to="/app/merchant" style={st("height: 36px; padding: 0 16px; border-radius: 9999px; background: #111111; color: #FFFFFF; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center;")}>Create campaign</Link>
+          <Link className="press bi" to="/app/merchant" style={st("height: 36px; padding: 0 16px; border-radius: 9999px; background: #111111; color: #FFFFFF; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center;")}>{variant === "app" && w.address ? "My campaigns" : "Create campaign"}</Link>
         )}
       </nav>
     </header>

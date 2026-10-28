@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { st } from "../lib/css";
 import { useApi, useCopy, useIndexFreshness, type IndexInfo } from "../lib/api";
 import { DevnetBadge, Dot, Mark, Page } from "../components/common";
+import { NavMenu } from "../components/navdrawer";
+import { WalletButton } from "../components/wallet-ui";
 
 const PMS: [string, string][] = [["pnpm", "pnpm add @noux/gateway"], ["npm", "npm install @noux/gateway"], ["bun", "bun add @noux/gateway"]];
 const NAV: [string, string[]][] = [
@@ -61,7 +63,8 @@ export default function Docs() {
     <Page>
       <header style={st("position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,0.9); backdrop-filter: saturate(180%) blur(12px); -webkit-backdrop-filter: saturate(180%) blur(12px); border-bottom: 1px solid #EBEBEB;")}>
         <nav aria-label="Primary" style={st("padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 24px;")}>
-          <Link to="/" aria-label="Noux home" style={st("display: flex; align-items: center; gap: 10px; color: #111111;")}>
+          <NavMenu />
+          <Link to="/" aria-label="Noux home" style={st("display: flex; align-items: center; gap: 10px; color: #111111; margin-left: -16px;")}>
             <Mark /><span style={st("font-size: 17px; font-weight: 600; letter-spacing: -0.03em;")}>noux</span><span style={st("font-size: 14px; color: #6B6B6B; font-weight: 400;")}>Docs</span>
           </Link>
           <button className="hide-sm" type="button" disabled aria-disabled="true" title="Search isn’t built yet" style={st("flex: 0 1 320px; height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; border: 1px solid #EBEBEB; border-radius: 10px; background: #FAFAFA; color: #6B6B6B; font: 400 14px Inter, sans-serif; text-align: left; opacity: .7;")}>
@@ -75,6 +78,7 @@ export default function Docs() {
             <a className="nl" href="https://github.com/Emmythefirst/Noux" target="_blank" rel="noreferrer" style={st("color: #6B6B6B;")}>GitHub ↗</a>
           </div>
           <DevnetBadge />
+          <WalletButton compact />
         </nav>
       </header>
 

@@ -93,6 +93,7 @@ export default function CampaignPage() {
   const sales = useApi<ApiPage<Receipt>>(`/campaigns/${address}/sales?limit=100`);
   const fresh = useIndexFreshness();
   const now = useNow(1000);
+  const me = useWallet().address;
   const c = camp.data;
   const chart = useMemo(() => dailyCounts(sales.data?.items ?? [], Date.now()), [sales.data]);
 
@@ -149,9 +150,12 @@ export default function CampaignPage() {
               </div>
             </div>
           </div>
+          <div style={st("display: flex; gap: 8px; flex-wrap: wrap;")}>
+          {me && me === c.merchant && <Link className="press bs" to="/app/merchant" style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center;")}>Manage in merchant console</Link>}
           <a className="press bp" href="#promote" style={st("height: 40px; padding: 0 16px; border-radius: 10px; background: #0F766E; color: #FFFFFF; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 8px;")}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1" /><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" /></svg>Get referral link
           </a>
+          </div>
         </div>
 
         {/* Terms */}

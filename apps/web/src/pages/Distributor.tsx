@@ -6,6 +6,7 @@ import { bpsPct, dayTime, fmt2, fmtAmount, mmss, short } from "../lib/format";
 import { isPubkey, useWalletAddress } from "../lib/wallet";
 import { useWallet } from "../lib/wallet-connect";
 import { WalletButton } from "../components/wallet-ui";
+import { NavMenu } from "../components/navdrawer";
 import { AppSidebar, ViewingBar, WalletForm } from "../components/appshell";
 import { DevnetBadge, Dot, ErrorState, Freshness, SampleBadge, WakingBanner } from "../components/common";
 
@@ -51,6 +52,7 @@ export default function Distributor() {
     <AppSidebar label="Distributor"
       ident={
         <div style={st("height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 8px;")}>
+          <NavMenu />
           <span aria-hidden="true" style={st("width: 24px; height: 24px; border-radius: 9999px; background: #0F766E; color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center; font: 600 10px Inter, sans-serif;")}>{wallet ? wallet.slice(0, 2) : "—"}</span>
           <span style={st("flex: 1; display: flex; flex-direction: column;")}><span className="mono" style={st("font-size: 13px; color: #111111;")}>{wallet ? short(wallet) : "No address"}</span><span style={st("font: 400 12px Inter, sans-serif; color: #6B6B6B;")}>Distributor · devnet</span></span>
         </div>
@@ -60,12 +62,11 @@ export default function Distributor() {
         { label: "Campaigns", icon: "M4 6h16M4 12h16M4 18h10", to: "/campaigns" },
         { label: "Referral links", icon: "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1", to: "/app/earnings#links" },
         { label: "Receipts", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2V3zM9 8h6M9 12h6", to: "/receipts", count: info ? String(info.metrics.eligiblePurchases) : undefined },
-        { label: "Agent keys", icon: "M4 4h16v16H4zM9 9h6v6H9z" },
         { label: "Settings", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12h2M18 12h2M12 4v2M12 18v2" },
       ]}
       extra={
         <>
-        <div style={st("display: flex;")}><WalletButton /></div>
+        <div style={st("display: flex;")}><WalletButton align="left" /></div>
         <Link className="press bs" to="/campaigns" style={st("display: flex; flex-direction: column; gap: 4px; padding: 12px; border: 1px solid #EBEBEB; border-radius: 12px; background: #FFFFFF; color: #333333;")}>
           <span style={st("font-size: 13px; font-weight: 500; color: #111111;")}>Find more campaigns</span>
           <span style={st("font-size: 12px; color: #6B6B6B;")}>{open.data ? `${open.data.total} campaign${open.data.total === 1 ? "" : "s"} with budget left` : "Browse the directory"}</span>

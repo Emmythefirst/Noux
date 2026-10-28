@@ -8,6 +8,7 @@ import { campaignPda, createCampaignIx, listingMessage, newTx, parseAmount, refu
 import { getBlockhash, useWallet } from "../lib/wallet-connect";
 import { RPC_URL } from "../lib/verify";
 import { WalletButton } from "../components/wallet-ui";
+import { NavMenu } from "../components/navdrawer";
 import { isPubkey, useWalletAddress } from "../lib/wallet";
 import { AppSidebar, ViewingBar, WalletForm } from "../components/appshell";
 import { openText, DevnetBadge, Dot, ErrorState, Freshness, SampleBadge, SaleBadge, WakingBanner } from "../components/common";
@@ -416,6 +417,7 @@ export default function Merchant() {
       {sidebar}
       <div style={st("flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column;")}>
         <header style={st("height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 clamp(16px, 3vw, 32px); border-bottom: 1px solid #EBEBEB;")}>
+          <NavMenu />
           <nav aria-label="Breadcrumb" style={st("font-size: 13px; color: #6B6B6B; display: flex; gap: 8px;")}><Link to="/" style={st("color: #6B6B6B;")}>Noux</Link><span aria-hidden="true">/</span><span style={st("color: #111111;")}>Merchant overview</span></nav>
           <span style={{ flex: 1 }} />
           <Freshness ageSeconds={fresh.info?.ageSeconds} fetchedAt={fresh.fetchedAt} now={fresh.now} error={fresh.error} />

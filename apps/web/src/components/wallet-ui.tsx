@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { st } from "../lib/css";
 import { short } from "../lib/format";
 import { useWallet } from "../lib/wallet-connect";
@@ -7,7 +8,8 @@ export function WalletModal({ onClose }: { onClose: () => void }) {
   const { wallets, connect, connecting, error, address } = useWallet();
   useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
   useEffect(() => { if (address) onClose(); }, [address, onClose]);
-  return (
+  // Portal to <body>: the sticky header uses backdrop-filter, which makes `position: fixed` children relative to the header instead of the screen.
+  return createPortal(
     <>
       <div className="scrim" onClick={onClose} style={st("position: fixed; inset: 0; z-index: 60; background: rgb(0 0 0 / .4);")} />
       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="wm-h" style={st("position: fixed; z-index: 61; left: 50%; top: 50%; margin-left: max(-200px, -50vw + 8px); margin-top: -160px; width: min(400px, calc(100% - 16px)); background: #FFFFFF; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 24px 48px -12px rgb(0 0 0 / .18);")}>
@@ -33,12 +35,13 @@ export function WalletModal({ onClose }: { onClose: () => void }) {
         {error && <p role="alert" style={st("font-size: 13px; color: #B42318;")}>{error}</p>}
         <p style={st("font-size: 12px; line-height: 18px; color: #6B6B6B;")}>Noux never sees your keys. Your wallet asks you to approve every transaction and message. This is devnet: nothing here moves real money.</p>
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
 
 /** The design's wallet pill; "Connect wallet" when nothing is connected. */
-export function WalletButton({ compact = false }: { compact?: boolean }) {
+export function WalletButton({ compact = false, align = "right" }: { compact?: boolean; align?: "left" | "right" }) {
   const { address, walletName, disconnect } = useWallet();
   const [modal, setModal] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -61,7 +64,7 @@ export function WalletButton({ compact = false }: { compact?: boolean }) {
         <span className="mono" style={st("font-size: 12px;")}>{short(address)}</span>
       </button>
       {menu && (
-        <div role="menu" className="fadein" style={st("position: absolute; right: 0; top: 42px; z-index: 40; min-width: 200px; background: #FFFFFF; border-radius: 12px; padding: 6px; box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 12px 24px -8px rgb(0 0 0 / .18);")}>
+        <div role="menu" className="fadein" style={{ ...(align === "left" ? { left: 0 } : { right: 0 }), ...st("position: absolute; top: 42px; z-index: 40; min-width: 200px; background: #FFFFFF; border-radius: 12px; padding: 6px; box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 12px 24px -8px rgb(0 0 0 / .18);") }}>
           <div style={st("padding: 8px 10px; font-size: 12px; color: #6B6B6B;")}>Connected with {walletName}</div>
           <button role="menuitem" className="press gh" type="button" onClick={() => { setMenu(false); void disconnect(); }} style={st("width: 100%; height: 32px; padding: 0 10px; border: 0; background: transparent; border-radius: 8px; font: 500 13px Inter, sans-serif; color: #111111; cursor: pointer; text-align: left;")}>Disconnect</button>
         </div>
