@@ -1,7 +1,7 @@
 import type pg from "pg";
-import type { IndexerChain, SaleRow } from "./chain";
+import type { IndexerChain, SaleRow, Snapshot } from "./chain";
 
-export interface SyncResult { campaigns: number; sales: number; enriched: number; slot: number }
+export interface SyncResult { campaigns: number; sales: number; enriched: number; slot: number; mode?: "full" | "incremental"; touched?: number }
 
 const UPSERT_BATCH = 500;
 const ENRICH_CONCURRENCY = 5;
@@ -15,8 +15,20 @@ const ENRICH_CONCURRENCY = 5;
  *  - transaction signatures (open / payment / settle) are filled in lazily, a bounded number per sync, with per-sale backoff so sales
  *    that cannot be read (yet) never block the others.
  */
-export async function syncOnce(pool: pg.Pool, chain: IndexerChain, opts: { enrichLimit?: number } = {}): Promise<SyncResult> {
+export async function syncOnce(pool: pg.Pool, chain: IndexerChain, opts: { enrichLimit?: number; now?: () => number } = {}): Promise<SyncResult> {
+  // read the transaction cursor BEFORE the snapshot: anything that happens after it is seen again by the next incremental pass
+  const head = chain.incremental ? await chain.incremental.head().catch(() => null) : null;
   const snap = await chain.snapshot(); // throws => nothing below runs
+  await apply(pool, snap, null, { mode: "full", cursor: head, fullAtSec: (opts.now ?? (() => Math.floor(Date.now() / 1000)))() });
+  const enriched = await enrich(pool, chain, opts.enrichLimit);
+  return { campaigns: snap.campaigns.length, sales: snap.sales.length, enriched, slot: snap.slot, mode: "full" };
+}
+
+/**
+ * Writes one view of the chain in ONE transaction. `gone` is null for a full snapshot (every open sale missing from it has vanished),
+ * or the explicit list of sale accounts that no longer exist (incremental: absence from a partial list means nothing).
+ */
+async function apply(pool: pg.Pool, snap: Snapshot, gone: string[] | null, o: { mode: "full" | "incremental"; cursor: string | null; fullAtSec: number | null }): Promise<void> {
   const c = await pool.connect();
   try {
     await c.query("BEGIN");
@@ -52,15 +64,21 @@ export async function syncOnce(pool: pg.Pool, chain: IndexerChain, opts: { enric
     // only OPEN sales can vanish (unpaid ones closed by close_expired_sale). Settled/refunded Sale accounts are permanent receipts, so a
     // short or empty RPC answer must never wipe them.
     const present = new Set(snap.sales.map((x) => x.address));
-    const vanished = [...known].filter(([a, st]) => st === "open" && !present.has(a)).map(([a]) => a);
+    const vanished = gone === null ? [...known].filter(([a, st]) => st === "open" && !present.has(a)).map(([a]) => a) : gone.filter((a) => known.get(a) === "open");
     if (vanished.length) await c.query("DELETE FROM idx_sales WHERE status = 'open' AND address = ANY($1::text[])", [vanished]);
+    const total = (await c.query("SELECT (SELECT count(*) FROM idx_campaigns)::int AS camps, (SELECT count(*) FROM idx_sales)::int AS sales")).rows[0];
     await c.query(
-      `INSERT INTO idx_state (id, last_synced_at, last_slot, last_error, last_error_at, campaigns, sales) VALUES (1, now(), $1, NULL, NULL, $2, $3)
-       ON CONFLICT (id) DO UPDATE SET last_synced_at=now(), last_slot=$1, last_error=NULL, last_error_at=NULL, campaigns=$2, sales=$3`,
-      [snap.slot, snap.campaigns.length, snap.sales.length],
+      `INSERT INTO idx_state (id, last_synced_at, last_slot, last_error, last_error_at, campaigns, sales, last_mode, cursor_sig, last_full_at)
+       VALUES (1, now(), $1, NULL, NULL, $2, $3, $4, $5, CASE WHEN $6::bigint IS NULL THEN NULL ELSE to_timestamp($6::bigint) END)
+       ON CONFLICT (id) DO UPDATE SET last_synced_at=now(), last_slot=$1, last_error=NULL, last_error_at=NULL, campaigns=$2, sales=$3, last_mode=$4,
+         cursor_sig=COALESCE($5, idx_state.cursor_sig), last_full_at=CASE WHEN $6::bigint IS NULL THEN idx_state.last_full_at ELSE to_timestamp($6::bigint) END`,
+      [snap.slot, total.camps, total.sales, o.mode, o.cursor, o.fullAtSec],
     );
     await c.query("COMMIT");
   } catch (e) { try { await c.query("ROLLBACK"); } catch { /* already aborted */ } throw e; } finally { c.release(); }
+}
+
+async function enrich(pool: pg.Pool, chain: IndexerChain, limit?: number): Promise<number> {
 
   // lazily fill transaction signatures for finished sales: newest first, a bounded amount per sync, a few at a time; a sale that cannot be
   // read (or is not complete yet) backs off exponentially (1, 2, 4 ... 360 minutes) instead of occupying the front of the queue forever
@@ -68,7 +86,7 @@ export async function syncOnce(pool: pg.Pool, chain: IndexerChain, opts: { enric
   const { rows } = await pool.query(
     `SELECT s.address, c.mint FROM idx_sales s JOIN idx_campaigns c ON c.address = s.campaign
       WHERE s.status <> 'open' AND (s.settle_sig IS NULL OR s.open_sig IS NULL) AND (s.enrich_next IS NULL OR s.enrich_next <= now())
-      ORDER BY s.settled_at DESC NULLS LAST LIMIT $1`, [opts.enrichLimit ?? 30]);
+      ORDER BY s.settled_at DESC NULLS LAST LIMIT $1`, [limit ?? 30]);
   const backoff = (address: string) => pool.query(`UPDATE idx_sales SET enrich_tries = enrich_tries + 1, enrich_next = now() + make_interval(mins => LEAST(power(2, enrich_tries)::int, 360)) WHERE address = $1`, [address]);
   const enrichOne = async (r: { address: string; mint: string }) => {
     try {
@@ -83,17 +101,57 @@ export async function syncOnce(pool: pg.Pool, chain: IndexerChain, opts: { enric
     } catch { await backoff(r.address).catch(() => {}); /* RPC trouble: try again later */ }
   };
   for (let i = 0; i < rows.length; i += ENRICH_CONCURRENCY) await Promise.all(rows.slice(i, i + ENRICH_CONCURRENCY).map(enrichOne));
-  return { campaigns: snap.campaigns.length, sales: snap.sales.length, enriched, slot: snap.slot };
+  return enriched;
 }
 
-export function startIndexerLoop(o: { pool: pg.Pool; chain: IndexerChain; intervalSeconds: number; log?: (m: string) => void }): () => void {
+/** Cursor = the newest transaction at least this old: everything newer is looked at again next pass, so a transaction the node indexes late is never skipped. */
+const CURSOR_SAFETY_SECS = 90;
+/** A full snapshot at least this often: catches anything the delta path cannot see (an account changed by a CPI the cursor missed, an RPC that dropped a transaction). */
+export const FULL_EVERY_SECS = 6 * 3600;
+
+/**
+ * Incremental pass: new program transactions -> the Sale accounts they carried, plus every sale the database still has OPEN (a payment into
+ * a vault is a token transfer, not a program transaction, so open sales are always refreshed). Campaigns are few and always re-read.
+ * Falls back to a full snapshot (returns null) when there is no usable cursor or the delta is too large.
+ */
+async function syncIncremental(pool: pg.Pool, chain: IndexerChain, inc: NonNullable<IndexerChain["incremental"]>, cursor: string, now: number, enrichLimit?: number): Promise<SyncResult | null> {
+  const { txs, overflow } = await inc.txsSince(cursor);
+  if (overflow) return null;
+  const campaigns = await inc.campaigns();
+  const mintOf = new Map(campaigns.map((k) => [k.address, k.mint]));
+  const programKeys = new Set(campaigns.map((k) => k.address)); // campaign accounts are re-read in full above: skip them as sale candidates
+  const open = (await pool.query("SELECT address FROM idx_sales WHERE status = 'open'")).rows.map((r) => r.address as string);
+  const candidates = new Set<string>(open);
+  for (const t of txs) for (const k of t.keys) if (!programKeys.has(k)) candidates.add(k);
+  const { sales, missing } = await inc.sales([...candidates], mintOf);
+  const slot = await inc.slot();
+  // the new cursor: newest transaction that is already old enough; otherwise keep the one we have
+  const safe = [...txs].reverse().find((t) => t.blockTime !== null && t.blockTime <= now - CURSOR_SAFETY_SECS);
+  await apply(pool, { slot, campaigns, sales }, missing, { mode: "incremental", cursor: safe?.signature ?? null, fullAtSec: null });
+  const enriched = await enrich(pool, chain, enrichLimit);
+  return { campaigns: campaigns.length, sales: sales.length, enriched, slot, mode: "incremental", touched: candidates.size };
+}
+
+/** What the loop runs: incremental when the chain supports it and a recent full snapshot + cursor exist, otherwise a full snapshot. */
+export async function syncAuto(pool: pg.Pool, chain: IndexerChain, opts: { enrichLimit?: number; now?: () => number; fullEverySecs?: number; forceFull?: boolean } = {}): Promise<SyncResult> {
+  const inc = chain.incremental;
+  const now = (opts.now ?? (() => Math.floor(Date.now() / 1000)))();
+  if (inc && !opts.forceFull) {
+    const st = (await pool.query("SELECT cursor_sig, extract(epoch FROM last_full_at)::bigint AS full_at FROM idx_state WHERE id = 1")).rows[0];
+    const fresh = st?.cursor_sig && st.full_at && now - Number(st.full_at) < (opts.fullEverySecs ?? FULL_EVERY_SECS);
+    if (fresh) { try { const r = await syncIncremental(pool, chain, inc, st.cursor_sig, now, opts.enrichLimit); if (r) return r; } catch (e) { console.log("indexer: incremental pass failed, falling back to a full snapshot: " + String((e as Error).message).slice(0, 160)); } }
+  }
+  return syncOnce(pool, chain, { ...opts, now: () => now });
+}
+
+export function startIndexerLoop(o: { pool: pg.Pool; chain: IndexerChain; intervalSeconds: number; forceFull?: boolean; log?: (m: string) => void }): () => void {
   const log = o.log ?? ((m: string) => console.log(m));
   let stopped = false;
   (async () => {
     while (!stopped) {
       try {
-        const r = await syncOnce(o.pool, o.chain);
-        log(`indexer: ${r.campaigns} campaigns, ${r.sales} sales, +${r.enriched} sig lookups @slot ${r.slot}`);
+        const r = await syncAuto(o.pool, o.chain, { forceFull: o.forceFull });
+        log(`indexer[${r.mode}]: ${r.campaigns} campaigns, ${r.sales} sales${r.touched !== undefined ? ` (${r.touched} accounts checked)` : ""}, +${r.enriched} sig lookups @slot ${r.slot}`);
       } catch (e) {
         const msg = String((e as Error).message).slice(0, 200);
         log(`indexer error: ${msg}`);

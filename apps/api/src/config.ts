@@ -24,6 +24,8 @@ const schema = z.object({
   KEEPER_TICK_SECONDS: num(30),
   /** Indexer (public directory/receipts). Runs inside this process. */
   ENABLE_INDEXER: z.enum(["0", "1"]).default("1"),
+  /** "incremental" follows new program transactions and re-reads only what they touched (plus open sales), with a full snapshot at start and every 6 h; "full" downloads every account each pass (escape hatch). */
+  INDEXER_MODE: z.enum(["incremental", "full"]).default("incremental"),
   INDEXER_INTERVAL_SECONDS: num(60),
   MINT_DECIMALS: z.coerce.number().int().min(0).max(18).default(6),
   /** Set to "1" only behind a proxy you control (Railway/Vercel): trusts X-Forwarded-For for the client IP. */

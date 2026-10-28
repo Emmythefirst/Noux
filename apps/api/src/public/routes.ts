@@ -251,8 +251,8 @@ export function publicRoutes(d: PublicDeps) {
 
   /* ---------- index freshness ---------- */
   app.get("/index", async (c) => {
-    const r = (await d.pool.query(`SELECT last_synced_at, last_slot, last_error, last_error_at, campaigns, sales FROM idx_state WHERE id = 1`)).rows[0];
-    return c.json({ lastSyncedAt: iso(r?.last_synced_at ?? null), ageSeconds: r?.last_synced_at ? Math.max(0, now() - Math.floor(new Date(r.last_synced_at).getTime() / 1000)) : null, lastSlot: r?.last_slot ? Number(r.last_slot) : null, campaigns: r?.campaigns ?? 0, sales: r?.sales ?? 0, lastError: r?.last_error ?? null, lastErrorAt: iso(r?.last_error_at ?? null) });
+    const r = (await d.pool.query(`SELECT last_synced_at, last_slot, last_error, last_error_at, campaigns, sales, last_mode, last_full_at FROM idx_state WHERE id = 1`)).rows[0];
+    return c.json({ lastSyncedAt: iso(r?.last_synced_at ?? null), ageSeconds: r?.last_synced_at ? Math.max(0, now() - Math.floor(new Date(r.last_synced_at).getTime() / 1000)) : null, lastSlot: r?.last_slot ? Number(r.last_slot) : null, campaigns: r?.campaigns ?? 0, sales: r?.sales ?? 0, lastError: r?.last_error ?? null, lastErrorAt: iso(r?.last_error_at ?? null), lastMode: r?.last_mode ?? null, lastFullSyncAt: iso(r?.last_full_at ?? null) });
   });
   return app;
 }

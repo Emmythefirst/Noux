@@ -27,6 +27,6 @@ if (cfg.KEEPER_PAYER_B58 && cfg.MINT) {
 }
 
 if (cfg.ENABLE_INDEXER === "1") {
-  const stop = startIndexerLoop({ pool, chain: new AnchorIndexerChain(new Connection(cfg.RPC_URL, "confirmed"), programId), intervalSeconds: cfg.INDEXER_INTERVAL_SECONDS });
+  const stop = startIndexerLoop({ pool, chain: new AnchorIndexerChain(new Connection(cfg.RPC_URL, "confirmed"), programId), intervalSeconds: cfg.INDEXER_INTERVAL_SECONDS, forceFull: cfg.INDEXER_MODE === "full" });
   for (const s of ["SIGTERM", "SIGINT"]) process.on(s, () => stop());
 }

@@ -263,7 +263,7 @@ describe("public API: distributors and stats", () => {
     expect((await get(app, "/v1/stats")).body.volumeBySource.listed.volume).toBe("300000");
   });
   it("/v1/index reports freshness and the last error", async () => {
-    const r = (await get(mkApp(), "/v1/index")).body; expect(r).toMatchObject({ lastSlot: 777, campaigns: 2, sales: 6, lastError: null });
+    const r = (await get(mkApp(), "/v1/index")).body; expect(r).toMatchObject({ lastSlot: 777, campaigns: 2, sales: 6, lastError: null, lastMode: "full" }); expect(r.lastFullSyncAt).not.toBeNull();
   });
 });
 

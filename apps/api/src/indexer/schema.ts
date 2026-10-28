@@ -27,4 +27,7 @@ export const INDEXER_MIGRATIONS = [
   `CREATE TABLE IF NOT EXISTS idx_state (
      id INT PRIMARY KEY, last_synced_at TIMESTAMPTZ, last_slot BIGINT, last_error TEXT, last_error_at TIMESTAMPTZ, campaigns INT NOT NULL DEFAULT 0, sales INT NOT NULL DEFAULT 0
    )`,
+  `ALTER TABLE idx_state ADD COLUMN IF NOT EXISTS last_mode TEXT`,
+  `ALTER TABLE idx_state ADD COLUMN IF NOT EXISTS cursor_sig TEXT`,
+  `ALTER TABLE idx_state ADD COLUMN IF NOT EXISTS last_full_at TIMESTAMPTZ`,
 ];
