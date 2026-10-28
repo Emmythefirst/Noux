@@ -140,15 +140,9 @@ pub mod noux {
         let amount = ctx.accounts.sale_vault.amount;
         require!(amount >= sale.price, NouxError::Underpaid);
 
-        let fee = mul_bps(amount, sale.fee_bps)?;
-        let wanted = mul_bps(amount, sale.commission_bps)?;
         let c = &mut ctx.accounts.campaign;
-        let remaining = c.commission_budget.saturating_sub(c.commission_spent);
-        let commission = wanted.min(remaining);
-        let merchant_amt = amount
-            .checked_sub(fee)
-            .and_then(|v| v.checked_sub(commission))
-            .ok_or(NouxError::Math)?; // remainder (rounding dust) goes to merchant
+        let Split { merchant: merchant_amt, commission, fee } =
+            compute_split(amount, sale.fee_bps, sale.commission_bps, c.commission_budget, c.commission_spent).ok_or(NouxError::Math)?;
         c.commission_spent = c.commission_spent.checked_add(commission).ok_or(NouxError::Math)?;
         c.settled_count = c.settled_count.checked_add(1).ok_or(NouxError::Math)?;
 
@@ -281,8 +275,27 @@ pub fn upgrade_authority(d: &[u8]) -> Option<Pubkey> {
     Some(Pubkey::new_from_array(d[13..45].try_into().ok()?))
 }
 
-fn mul_bps(amount: u64, bps: u16) -> Result<u64> {
-    Ok((amount as u128 * bps as u128 / BPS as u128) as u64)
+fn mul_bps(amount: u64, bps: u16) -> u64 {
+    (amount as u128 * bps as u128 / BPS as u128) as u64
+}
+
+/// The three parts of a settled payment. They always sum to the amount paid.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Split {
+    pub merchant: u64,
+    pub commission: u64,
+    pub fee: u64,
+}
+
+/// The settlement arithmetic, pure so it can be tested exhaustively: fee and wanted commission are floored, commission is capped by
+/// what is left of the campaign budget, and the merchant gets the remainder (so rounding dust goes to the merchant and the parts sum
+/// exactly to `amount`). `None` only if fee + commission would exceed the amount (impossible for bps the program accepts).
+pub fn compute_split(amount: u64, fee_bps: u16, commission_bps: u16, budget: u64, spent: u64) -> Option<Split> {
+    let fee = mul_bps(amount, fee_bps);
+    let wanted = mul_bps(amount, commission_bps);
+    let commission = wanted.min(budget.saturating_sub(spent));
+    let merchant = amount.checked_sub(fee)?.checked_sub(commission)?;
+    Some(Split { merchant, commission, fee })
 }
 
 /// Domain-separated claim message: tag | program id | cluster | campaign | distributor |
@@ -583,4 +596,145 @@ pub enum NouxError {
     NotUpgradeAuthority,
     #[msg("signer is not the config admin")]
     NotAdmin,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Tiny deterministic generator: no external crates, reproducible failures.
+    struct Rng(u64);
+    impl Rng {
+        fn next(&mut self) -> u64 { self.0 ^= self.0 << 13; self.0 ^= self.0 >> 7; self.0 ^= self.0 << 17; self.0 }
+        fn amount(&mut self) -> u64 {
+            match self.next() % 6 {
+                0 => self.next() % 20,
+                1 => self.next() % 100_000,
+                2 => self.next() % 1_000_000_000_000,
+                3 => u64::MAX - self.next() % 1_000,
+                _ => self.next(),
+            }
+        }
+    }
+
+    /// A different algorithm for floor(amount * bps / 10000) that never leaves u64: split the amount by 10000 first.
+    fn reference_bps(amount: u64, bps: u16) -> u64 { (amount / 10_000) * bps as u64 + (amount % 10_000) * bps as u64 / 10_000 }
+
+    #[test]
+    fn worked_examples_match_the_docs() {
+        // 100000 at 15% + 1%: 84000 / 15000 / 1000
+        assert_eq!(compute_split(100_000, 100, 1500, 1_000_000, 0), Some(Split { merchant: 84_000, commission: 15_000, fee: 1_000 }));
+        // 33333 (rounding): fee 333, commission 4999, merchant keeps the dust
+        assert_eq!(compute_split(33_333, 100, 1500, 1_000_000, 0), Some(Split { merchant: 28_001, commission: 4_999, fee: 333 }));
+        // 1 base unit: everything floors to zero, the merchant keeps it
+        assert_eq!(compute_split(1, 100, 1500, 1_000_000, 0), Some(Split { merchant: 1, commission: 0, fee: 0 }));
+        // budget cap: only 5000 left of the 15000 wanted
+        assert_eq!(compute_split(100_000, 100, 1500, 20_000, 15_000), Some(Split { merchant: 94_000, commission: 5_000, fee: 1_000 }));
+        // budget exhausted or overspent (spent > budget): no commission, no underflow
+        assert_eq!(compute_split(100_000, 100, 1500, 20_000, 20_000), Some(Split { merchant: 99_000, commission: 0, fee: 1_000 }));
+        assert_eq!(compute_split(100_000, 100, 1500, 20_000, u64::MAX), Some(Split { merchant: 99_000, commission: 0, fee: 1_000 }));
+        // zero everything
+        assert_eq!(compute_split(0, 100, 1500, 1, 0), Some(Split { merchant: 0, commission: 0, fee: 0 }));
+    }
+
+    #[test]
+    fn floor_matches_an_independent_algorithm_everywhere() {
+        let mut r = Rng(0x9E3779B97F4A7C15);
+        for _ in 0..200_000 {
+            let (a, bps) = (r.amount(), (r.next() % 10_001) as u16);
+            assert_eq!(mul_bps(a, bps), reference_bps(a, bps), "amount {a} bps {bps}");
+        }
+        for a in [0, 1, 9_999, 10_000, 10_001, u64::MAX - 1, u64::MAX] { for bps in [0u16, 1, 100, 500, 1500, 5000, 5500, 10_000] { assert_eq!(mul_bps(a, bps), reference_bps(a, bps)); } }
+    }
+
+    #[test]
+    fn the_parts_always_sum_to_the_amount_and_respect_every_rule() {
+        let mut r = Rng(0xDEADBEEFCAFEF00D);
+        for _ in 0..300_000 {
+            let amount = r.amount();
+            let (fee_bps, commission_bps) = ((r.next() % (MAX_FEE_BPS as u64 + 1)) as u16, (r.next() % (MAX_COMMISSION_BPS as u64 + 1)) as u16);
+            let budget = if r.next() % 4 == 0 { r.next() % 50_000 } else { r.next() };
+            let spent = match r.next() % 4 { 0 => 0, 1 => budget, 2 => r.next(), _ => r.next() % (budget.max(1)) };
+            let s = compute_split(amount, fee_bps, commission_bps, budget, spent).expect("accepted bps can never exceed the amount");
+            let ctx = format!("amount {amount} fee {fee_bps} comm {commission_bps} budget {budget} spent {spent} -> {s:?}");
+            // 1. exact sum, in a wider type so the check itself cannot overflow
+            assert_eq!(s.merchant as u128 + s.commission as u128 + s.fee as u128, amount as u128, "{ctx}");
+            // 2. fee is exactly the floored fee
+            assert_eq!(s.fee, reference_bps(amount, fee_bps), "{ctx}");
+            // 3. commission never exceeds what was wanted nor what is left of the budget
+            let wanted = reference_bps(amount, commission_bps);
+            assert!(s.commission <= wanted && s.commission <= budget.saturating_sub(spent), "{ctx}");
+            // 4. it is the minimum of the two (the cap only bites when it must)
+            assert_eq!(s.commission, wanted.min(budget.saturating_sub(spent)), "{ctx}");
+            // 5. the merchant never gets less than amount minus fee minus the wanted commission (dust only ever helps the merchant)
+            assert!(s.merchant >= amount - s.fee - wanted, "{ctx}");
+        }
+    }
+
+    #[test]
+    fn many_sales_can_never_push_total_commission_past_the_budget() {
+        let mut r = Rng(0x1234_5678_9ABC_DEF1);
+        for _ in 0..2_000 {
+            let budget = r.next() % 1_000_000;
+            let (mut spent, commission_bps) = (0u64, (r.next() % 5001) as u16);
+            for _ in 0..50 {
+                let amount = r.next() % 5_000_000;
+                let s = compute_split(amount, 100, commission_bps, budget, spent).unwrap();
+                spent = spent.checked_add(s.commission).expect("spent must not overflow");
+                assert!(spent <= budget, "spent {spent} > budget {budget}");
+            }
+        }
+    }
+
+    #[test]
+    fn maximum_rates_leave_the_merchant_at_least_45_percent() {
+        for amount in [1u64, 99, 100_000, u64::MAX] {
+            let s = compute_split(amount, MAX_FEE_BPS, MAX_COMMISSION_BPS, u64::MAX, 0).unwrap();
+            assert_eq!(s.merchant as u128 + s.commission as u128 + s.fee as u128, amount as u128);
+            assert!(s.merchant as u128 * 100 >= amount as u128 * 45, "merchant share fell below 45% at max rates for {amount}");
+        }
+    }
+
+    #[test]
+    fn rates_the_program_refuses_are_the_only_way_to_fail() {
+        // create_campaign requires commission_bps + fee_bps <= 10000; beyond that the split would not fit in the amount
+        assert_eq!(compute_split(100, 10_000, 10_000, u64::MAX, 0), None);
+        assert!(compute_split(100, 5_000, 5_000, u64::MAX, 0).is_some());
+    }
+
+    #[test]
+    fn claim_message_layout_is_197_bytes_in_the_documented_order() {
+        let (pid, camp, dist, buyer) = (Pubkey::new_from_array([1; 32]), Pubkey::new_from_array([2; 32]), Pubkey::new_from_array([3; 32]), Pubkey::new_from_array([4; 32]));
+        let m = claim_message(&pid, b"devnet\0\0", &camp, &dist, &buyer, 0x0102030405060708, 0x1112131415161718, &[9u8; 32]);
+        assert_eq!(m.len(), 197);
+        assert_eq!(&m[0..13], b"NOUX-CLAIM-v1");
+        assert_eq!(&m[13..45], &[1u8; 32]); assert_eq!(&m[45..53], b"devnet\0\0");
+        assert_eq!(&m[53..85], &[2u8; 32]); assert_eq!(&m[85..117], &[3u8; 32]); assert_eq!(&m[117..149], &[4u8; 32]);
+        assert_eq!(&m[149..157], &0x0102030405060708i64.to_le_bytes()); assert_eq!(&m[157..165], &0x1112131415161718u64.to_le_bytes());
+        assert_eq!(&m[165..197], &[9u8; 32]);
+    }
+
+    #[test]
+    fn every_signed_field_changes_the_message() {
+        let k = |b: u8| Pubkey::new_from_array([b; 32]);
+        let base = claim_message(&k(1), b"devnet\0\0", &k(2), &k(3), &k(4), 10, 20, &[5u8; 32]);
+        let variants = [
+            claim_message(&k(9), b"devnet\0\0", &k(2), &k(3), &k(4), 10, 20, &[5u8; 32]), claim_message(&k(1), b"mainnet\0", &k(2), &k(3), &k(4), 10, 20, &[5u8; 32]),
+            claim_message(&k(1), b"devnet\0\0", &k(9), &k(3), &k(4), 10, 20, &[5u8; 32]), claim_message(&k(1), b"devnet\0\0", &k(2), &k(9), &k(4), 10, 20, &[5u8; 32]),
+            claim_message(&k(1), b"devnet\0\0", &k(2), &k(3), &k(9), 10, 20, &[5u8; 32]), claim_message(&k(1), b"devnet\0\0", &k(2), &k(3), &k(4), 11, 20, &[5u8; 32]),
+            claim_message(&k(1), b"devnet\0\0", &k(2), &k(3), &k(4), 10, 21, &[5u8; 32]), claim_message(&k(1), b"devnet\0\0", &k(2), &k(3), &k(4), 10, 20, &[6u8; 32]),
+        ];
+        for (i, v) in variants.iter().enumerate() { assert_ne!(&base, v, "field {i} is not covered by the signature"); }
+    }
+
+    #[test]
+    fn upgrade_authority_parser_accepts_only_the_exact_programdata_layout() {
+        let auth = Pubkey::new_from_array([7; 32]);
+        let mut d = vec![0u8; 45]; d[0..4].copy_from_slice(&3u32.to_le_bytes()); d[12] = 1; d[13..45].copy_from_slice(auth.as_ref());
+        assert_eq!(upgrade_authority(&d), Some(auth));
+        let mut revoked = d.clone(); revoked[12] = 0; assert_eq!(upgrade_authority(&revoked), None, "an immutable program has no authority");
+        let mut wrong_variant = d.clone(); wrong_variant[0] = 2; assert_eq!(upgrade_authority(&wrong_variant), None);
+        assert_eq!(upgrade_authority(&d[..44]), None, "truncated data");
+        assert_eq!(upgrade_authority(&[]), None);
+    }
 }

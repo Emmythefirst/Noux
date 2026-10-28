@@ -66,7 +66,7 @@ API tests need Postgres: `docker run -d -p 54329:5432 -e POSTGRES_PASSWORD=devon
 cd apps/api && pnpm demo-buy    # claim -> x402 payment -> settlement -> public receipt, plus the two fallbacks
 ```
 
-**Program checks** on a local validator (22 checks, every failure asserts the specific program error): see the header of `apps/api/scripts/fee-local.ts`.
+**Program checks:** Rust unit tests for the arithmetic (`cd program && cargo test -p noux --lib`), and local-validator suites (every failure asserts the specific program error): `apps/api/scripts/fee-local.ts` (22 checks) and `settle-edge-local.ts` (11 checks); see their headers.
 
 ## Repository layout
 
