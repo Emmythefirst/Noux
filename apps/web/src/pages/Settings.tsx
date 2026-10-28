@@ -13,16 +13,14 @@ const H2 = "font-size: 16px; line-height: 20px; letter-spacing: -0.01em; font-we
 const CARD = "border: 1px solid #EBEBEB; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px;";
 const ROW = "display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; font-size: 13px;";
 
-export default function Settings() {
+export function SettingsPanel() {
   const { mode, setMode } = useTheme();
   const w = useWallet();
   const [saved, setSaved] = useWalletAddress();
   const hostOf = (u: string) => { try { return new URL(u).host; } catch { return u; } };
   return (
-    <Page>
-      <TopNav />
-      <main style={st("max-width: 720px; margin: 0 auto; padding: 48px clamp(16px, 4vw, 48px) 96px; display: flex; flex-direction: column; gap: 24px;")}>
-        <h1 style={st("font-size: 32px; line-height: 36px; letter-spacing: -0.025em; font-weight: 500; color: #111111;")}>Settings</h1>
+    <div style={st("max-width: 720px; display: flex; flex-direction: column; gap: 24px;")}>
+      <h1 style={st("font-size: 32px; line-height: 36px; letter-spacing: -0.025em; font-weight: 500; color: #111111;")}>Settings</h1>
 
         <section aria-labelledby="ap-h" style={st(CARD)}>
           <h2 id="ap-h" style={st(H2)}>Appearance</h2>
@@ -71,6 +69,16 @@ export default function Settings() {
             ].map(([k, v], i, a) => <div key={k} style={st(ROW + (i < a.length - 1 ? " border-bottom: 1px solid #EBEBEB;" : ""))}><span style={st("color: #6B6B6B;")}>{k}</span><span className="mono" style={st("font-size: 12px; color: #111111;")}>{v}</span></div>)}
           </div>
         </section>
+    </div>
+  );
+}
+
+export default function Settings() {
+  return (
+    <Page>
+      <TopNav />
+      <main style={st("max-width: 720px; margin: 0 auto; padding: 48px clamp(16px, 4vw, 48px) 96px;")}>
+        <SettingsPanel />
       </main>
     </Page>
   );

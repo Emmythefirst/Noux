@@ -15,18 +15,12 @@ const GROUPS: { title: string; items: { label: string; to: string; icon: string 
     { label: "Docs", to: "/docs/quickstart", icon: "M6 3h9l4 4v14H6zM14 3v5h5" },
   ] },
   { title: "Distributor", items: [
-    { label: "My earnings", to: "/app/earnings", icon: "M3 3v18h18M7 15l4-4 3 3 5-6" },
-    { label: "My campaigns", to: "/app/earnings#campaigns", icon: "M4 6h16M4 12h16M4 18h10" },
+    { label: "Earnings", to: "/app/earnings", icon: "M3 3v18h18M7 15l4-4 3 3 5-6" },
     { label: "Referral links", to: "/app/earnings#links", icon: "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" },
-    { label: "My receipts", to: "/app/earnings#activity", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2V3zM9 8h6M9 12h6" },
+    { label: "Receipts", to: "/app/earnings#activity", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2V3zM9 8h6M9 12h6" },
   ] },
   { title: "Merchant", items: [
-    { label: "Overview", to: "/app/merchant", icon: "M3 12h4l3-8 4 16 3-8h4" },
-    { label: "My campaigns", to: "/app/merchant/campaigns", icon: "M4 6h16M4 12h16M4 18h10" },
-    { label: "My sales", to: "/app/merchant/sales", icon: "M3 3v18h18M7 15l4-4 3 3 5-6" },
-    { label: "My receipts", to: "/app/merchant/receipts", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2V3zM9 8h6M9 12h6" },
-    { label: "Budget", to: "/app/merchant/budget", icon: "M3 7h18v12H3zM16 13h2M3 7l3-4h12l3 4" },
-    { label: "Distributors", to: "/app/merchant/distributors", icon: "M16 19v-1a4 4 0 0 0-8 0v1M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" },
+    { label: "Overview and campaigns", to: "/app/merchant", icon: "M3 12h4l3-8 4 16 3-8h4" },
   ] },
   { title: "Account", items: [
     { label: "Settings", to: "/settings", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12h2M18 12h2M12 4v2M12 18v2" },

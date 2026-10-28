@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { st } from "../lib/css";
 import { ApiError, useApi, useCopy, useIndexFreshness, useNow, type Campaign, type DistributorInfo, type Page as ApiPage, type Receipt } from "../lib/api";
 import { bpsPct, dayTime, fmt2, fmtAmount, mmss, short } from "../lib/format";
@@ -7,6 +7,7 @@ import { isPubkey, useWalletAddress } from "../lib/wallet";
 import { useWallet } from "../lib/wallet-connect";
 import { WalletButton } from "../components/wallet-ui";
 import { NavMenu } from "../components/navdrawer";
+import { SettingsPanel } from "./Settings";
 import { ThemeToggle } from "../lib/theme";
 import { AppSidebar, ViewingBar, WalletForm } from "../components/appshell";
 import { DevnetBadge, Dot, ErrorState, Freshness, SampleBadge, WakingBanner } from "../components/common";
@@ -32,6 +33,8 @@ export default function Distributor() {
   const [sp, setSp] = useSearchParams();
   const [saved, setSaved] = useWalletAddress();
   const cw = useWallet();
+  const { pathname } = useLocation();
+  const isSettings = pathname === "/app/earnings/settings";
   const q = sp.get("wallet") ?? "";
   const wallet = isPubkey(q) ? q : (cw.address ?? "");
   const pick = (a: string) => { setSaved(a); setSp({ wallet: a }); };
@@ -60,11 +63,11 @@ export default function Distributor() {
         </div>
       }
       nav={[
-        { label: "My earnings", icon: "M3 3v18h18M7 15l4-4 3 3 5-6", current: true, to: wallet ? `/app/earnings?wallet=${wallet}` : "/app/earnings" },
+        { label: "My earnings", icon: "M3 3v18h18M7 15l4-4 3 3 5-6", current: !isSettings, to: wallet ? `/app/earnings?wallet=${wallet}` : "/app/earnings" },
         { label: "My campaigns", icon: "M4 6h16M4 12h16M4 18h10", to: `/app/earnings${wallet ? `?wallet=${wallet}` : ""}#campaigns` },
         { label: "Referral links", icon: "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1", to: `/app/earnings${wallet ? `?wallet=${wallet}` : ""}#links` },
         { label: "My receipts", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2V3zM9 8h6M9 12h6", to: `/app/earnings${wallet ? `?wallet=${wallet}` : ""}#activity`, count: info ? String(info.metrics.eligiblePurchases) : undefined },
-        { label: "Settings", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12h2M18 12h2M12 4v2M12 18v2", to: "/settings" },
+        { label: "Settings", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12h2M18 12h2M12 4v2M12 18v2", current: isSettings, to: "/app/earnings/settings" },
       ]}
       extra={
         <>
@@ -80,6 +83,7 @@ export default function Distributor() {
   );
 
   const body = (() => {
+    if (isSettings) return <SettingsPanel />;
     if (!wallet) return (
       <>
         <div style={st("display: flex; flex-direction: column; gap: 4px;")}>

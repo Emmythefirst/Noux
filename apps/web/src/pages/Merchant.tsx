@@ -10,6 +10,7 @@ import { RPC_URL } from "../lib/verify";
 import { WalletButton } from "../components/wallet-ui";
 import { NavMenu } from "../components/navdrawer";
 import { ThemeToggle } from "../lib/theme";
+import { SettingsPanel } from "./Settings";
 import { isPubkey, useWalletAddress } from "../lib/wallet";
 import { AppSidebar, ViewingBar, WalletForm } from "../components/appshell";
 import { openText, DevnetBadge, Dot, ErrorState, Freshness, SampleBadge, SaleBadge, WakingBanner } from "../components/common";
@@ -23,6 +24,7 @@ const SECTION_TITLE: Record<string, [string, string]> = {
   receipts: ["My receipts", "The public receipt for each of your sales: what you kept, what distributors earned, the protocol fee."],
   budget: ["Budget", "Your commission budget per campaign. It is a cap, not locked money."],
   distributors: ["Distributors", "Who has sold for you, and what they have earned."],
+  settings: ["Settings", ""],
 };
 const MAX_CAMPAIGNS = 8;
 const FEE_BPS = 100;
@@ -228,7 +230,7 @@ export default function Merchant() {
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 8000); return () => clearTimeout(t); }, [toast]);
   const pick = (a: string) => { setSaved(a); setSp({ wallet: a }); };
   const { pathname } = useLocation();
-  const section = (["campaigns", "sales", "receipts", "budget", "distributors"] as const).find((x) => pathname === `/app/merchant/${x}`) ?? "overview";
+  const section = (["campaigns", "sales", "receipts", "budget", "distributors", "settings"] as const).find((x) => pathname === `/app/merchant/${x}`) ?? "overview";
   const keep = sp.get("wallet") && isPubkey(sp.get("wallet")!) ? `?wallet=${sp.get("wallet")}` : ""; // a pasted address stays in the URL as you move between sections
   const [tab, setTab] = useState<Tab>("all");
   const [salesLimit, setSalesLimit] = useState(25);
@@ -258,7 +260,7 @@ export default function Merchant() {
         { label: "My receipts", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2V3zM9 8h6M9 12h6", current: section === "receipts", to: `/app/merchant/receipts${keep}` },
         { label: "Budget", icon: "M3 7h18v12H3zM16 13h2M3 7l3-4h12l3 4", current: section === "budget", to: `/app/merchant/budget${keep}` },
         { label: "Distributors", icon: "M16 19v-1a4 4 0 0 0-8 0v1M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", current: section === "distributors", to: `/app/merchant/distributors${keep}` },
-        { label: "Settings", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12h2M18 12h2M12 4v2M12 18v2", to: "/settings" },
+        { label: "Settings", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12h2M18 12h2M12 4v2M12 18v2", current: section === "settings", to: `/app/merchant/settings${keep}` },
       ]}
       extra={shown.length > 0 ? (
         <div style={st("display: flex; flex-direction: column; gap: 4px;")}>
@@ -277,6 +279,7 @@ export default function Merchant() {
   );
 
   const body = (() => {
+    if (section === "settings") return <SettingsPanel />;
     if (!wallet) return (
       <>
         <div style={st("display: flex; flex-direction: column; gap: 4px;")}><h1 style={st("font-size: 20px; line-height: 26px; letter-spacing: -0.015em; font-weight: 500; color: #111111;")}>Overview</h1><p style={st("font-size: 14px; color: #6B6B6B;")}>Sales across your campaigns.</p></div>
