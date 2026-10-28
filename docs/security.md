@@ -31,7 +31,7 @@ Status: devnet, **no independent audit**. Read this before putting real money ne
 ## Browser and wallet
 
 - The website never sees a private key. Every transaction and message is approved in the user's wallet.
-- Receipt verification checks against a Solana node directly. It does not cover transactions that use address lookup tables.
+- Receipt verification checks against a Solana node directly. It was run against real v0 transactions that use an address lookup table (on a local validator, through `apps/web/test/verify-alt.test.ts`) and passes; it has not been run against a lookup-table sale on devnet or mainnet.
 - Wallets must expose `solana:signTransaction` (the buy page needs it because the facilitator, not the wallet, submits the payment). Wallets that can only sign-and-send are not listed.
 - Claim requests are plain text signed with `signMessage`. A hardware wallet that cannot sign arbitrary text cannot request a claim.
 - Before signing, the site checks the wallet offers the site's network (devnet) and says so if not. For a payment it also checks the wallet signed exactly the transaction the site built; a wallet that adds its own instructions first (for example a safety guard) is refused with a clear message, because its signature would not match what the facilitator receives. Phantom on devnet passed this; **mainnet behaviour of any wallet is untested.**
