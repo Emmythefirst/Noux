@@ -34,7 +34,7 @@ input::placeholder{color:#6B6B6B}
 input[type=range]{accent-color:#0F766E}
 select{appearance:none;-webkit-appearance:none}
 code.i{font-family:"Geist Mono",ui-monospace,Menlo,monospace;font-size:13px;background:#F4F4F5;color:#111111;border-radius:4px;padding:1px 5px}
-h2[id],h3[id]{scroll-margin-top:80px}
+h2[id],h3[id],section[id]{scroll-margin-top:84px}
 .skip{position:absolute;left:-9999px;top:8px}
 .skip:focus{left:8px;z-index:100;background:#fff;padding:8px 12px;border-radius:8px}
 .vh{position:absolute;left:-9999px}

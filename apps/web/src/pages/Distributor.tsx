@@ -1,16 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { st } from "../lib/css";
-import { ApiError, useApi, useCopy, useIndexFreshness, useNow, type Campaign, type DistributorInfo, type Page as ApiPage, type Receipt } from "../lib/api";
+import { ApiError, useApi, useCopy, useNow, type Campaign, type DistributorInfo, type Page as ApiPage, type Receipt } from "../lib/api";
 import { bpsPct, dayTime, fmt2, fmtAmount, mmss, short } from "../lib/format";
 import { isPubkey, useWalletAddress } from "../lib/wallet";
 import { useWallet } from "../lib/wallet-connect";
-import { WalletButton } from "../components/wallet-ui";
-import { NavMenu } from "../components/navdrawer";
-import { SettingsPanel } from "./Settings";
-import { ThemeToggle } from "../lib/theme";
-import { AppSidebar, ViewingBar, WalletForm } from "../components/appshell";
-import { DevnetBadge, Dot, ErrorState, Freshness, SampleBadge, WakingBanner } from "../components/common";
+import { ViewingBar, WalletForm } from "../components/appshell";
+import { ErrorState, Page, SampleBadge, TopNav, WakingBanner } from "../components/common";
 
 const H2 = "font-size: 16px; line-height: 20px; letter-spacing: -0.01em; font-weight: 500; color: #111111;";
 const SAMPLE_DISTRIBUTOR = "A84GL1aExB8hVTdVHYs5P4wgSaj5tnxZMPoqwdBUZxUo"; // the Noux demo buyer-agent's distributor wallet
@@ -33,8 +29,7 @@ export default function Distributor() {
   const [sp, setSp] = useSearchParams();
   const [saved, setSaved] = useWalletAddress();
   const cw = useWallet();
-  const { pathname } = useLocation();
-  const isSettings = pathname === "/app/earnings/settings";
+  const { hash } = useLocation();
   const q = sp.get("wallet") ?? "";
   const wallet = isPubkey(q) ? q : (cw.address ?? "");
   const pick = (a: string) => { setSaved(a); setSp({ wallet: a }); };
@@ -42,8 +37,6 @@ export default function Distributor() {
 
   const d = useApi<DistributorInfo>(wallet ? `/distributors/${wallet}` : null);
   const all = useApi<ApiPage<Campaign>>(wallet ? "/campaigns?includeUnlisted=1&limit=100" : null);
-  const open = useApi<ApiPage<Campaign>>(wallet ? "/campaigns?status=active&limit=1" : null);
-  const fresh = useIndexFreshness();
   const now = useNow(1000);
   const [fmtTab, setFmtTab] = useState<"people" | "agents">("people");
   const [campSel, setCampSel] = useState("");
@@ -52,38 +45,7 @@ export default function Distributor() {
   const chart = useMemo(() => dailyEarned(info?.recent ?? [], Date.now()), [info]);
   const camps = new Map((all.data?.items ?? []).map((c) => [c.address, c]));
 
-  const sidebar = (
-    <AppSidebar label="Distributor"
-      ident={
-        <div style={st("height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 8px;")}>
-          <NavMenu />
-          <span aria-hidden="true" style={st("width: 24px; height: 24px; border-radius: 9999px; background: #0F766E; color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center; font: 600 10px Inter, sans-serif;")}>{wallet ? wallet.slice(0, 2) : "—"}</span>
-          <span style={st("flex: 1; display: flex; flex-direction: column;")}><span className="mono" style={st("font-size: 13px; color: #111111;")}>{wallet ? short(wallet) : "No address"}</span><span style={st("font: 400 12px Inter, sans-serif; color: #6B6B6B;")}>Distributor · devnet</span></span>
-          <ThemeToggle />
-        </div>
-      }
-      nav={[
-        { label: "My earnings", icon: "M3 3v18h18M7 15l4-4 3 3 5-6", current: !isSettings, to: wallet ? `/app/earnings?wallet=${wallet}` : "/app/earnings" },
-        { label: "My campaigns", icon: "M4 6h16M4 12h16M4 18h10", to: `/app/earnings${wallet ? `?wallet=${wallet}` : ""}#campaigns` },
-        { label: "Referral links", icon: "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1", to: `/app/earnings${wallet ? `?wallet=${wallet}` : ""}#links` },
-        { label: "My receipts", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2V3zM9 8h6M9 12h6", to: `/app/earnings${wallet ? `?wallet=${wallet}` : ""}#activity`, count: info ? String(info.metrics.eligiblePurchases) : undefined },
-        { label: "Settings", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12h2M18 12h2M12 4v2M12 18v2", current: isSettings, to: "/app/earnings/settings" },
-      ]}
-      extra={
-        <>
-        <div style={st("display: flex;")}><WalletButton align="left" /></div>
-        <Link className="press bs" to="/campaigns" style={st("display: flex; flex-direction: column; gap: 4px; padding: 12px; border: 1px solid #EBEBEB; border-radius: 12px; background: #FFFFFF; color: #333333;")}>
-          <span style={st("font-size: 13px; font-weight: 500; color: #111111;")}>Find more campaigns</span>
-          <span style={st("font-size: 12px; color: #6B6B6B;")}>{open.data ? `${open.data.total} campaign${open.data.total === 1 ? "" : "s"} with budget left` : "Browse the directory"}</span>
-        </Link>
-        </>
-      }
-      footer={<div style={st("display: flex; align-items: center; gap: 8px; padding: 8px; border-top: 1px solid #EBEBEB;")}><DevnetBadge /><Freshness ageSeconds={fresh.info?.ageSeconds} fetchedAt={fresh.fetchedAt} now={fresh.now} error={fresh.error} /></div>}
-    />
-  );
-
   const body = (() => {
-    if (isSettings) return <SettingsPanel />;
     if (!wallet) return (
       <>
         <div style={st("display: flex; flex-direction: column; gap: 4px;")}>
@@ -279,12 +241,13 @@ export default function Distributor() {
     );
   })();
 
+  // the earnings sections only exist once the data has loaded, so jump to an #anchor (Referral links, Receipts) after that
+  useEffect(() => { if (hash && info) requestAnimationFrame(() => document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: "smooth", block: "start" })); }, [hash, info]);
+
   return (
-    <div style={st("display: flex; flex-wrap: wrap; min-height: 100vh; background: #FFFFFF;")}>
-      {sidebar}
-      <div style={st("flex: 999 1 560px; min-width: 0;")}>
-        <main style={st("padding: 28px clamp(16px, 3vw, 32px) 64px; display: flex; flex-direction: column; gap: 24px; max-width: 1240px;")}>{body}</main>
-      </div>
-    </div>
+    <Page>
+      <TopNav />
+      <main style={st("max-width: 1240px; margin: 0 auto; padding: 32px clamp(16px, 4vw, 48px) 80px; display: flex; flex-direction: column; gap: 24px;")}>{body}</main>
+    </Page>
   );
 }
