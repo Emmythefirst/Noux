@@ -1,4 +1,4 @@
-// Dev-only browser e2e of the human buyer flow against the LIVE devnet services: referred purchase (claim + wallet-signed x402 payment, receipt settles 84000/15000/1000 to the referrer), plain purchase, own-link warning. Needs playwright-core, tweetnacl, @solana/web3.js, @solana/spl-token, Chromium, RPC_URL, and a funded deploy wallet; run vite first.
+// Dev-only browser e2e of the human buyer flow against the LIVE devnet services (referred purchase, receipt note, remembered purchase, plain purchase, own-link warning). Needs playwright-core, tweetnacl, @solana/web3.js, @solana/spl-token, Chromium, RPC_URL and a funded deploy wallet; run vite first. Last run: 13/13.
 import { chromium } from "playwright-core";
 import { Connection, Keypair, PublicKey, SystemProgram, Transaction, VersionedTransaction, sendAndConfirmTransaction } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction, createTransferInstruction } from "@solana/spl-token";
@@ -53,11 +53,17 @@ let rcpt = null; const sale = saleLink?.replace("/r/", "");
 for (let i = 0; i < 30 && sale && !rcpt?.status?.match(/settled/); i++) { await new Promise((r) => setTimeout(r, 6000)); rcpt = await (await fetch("https://noux-api.onrender.com/v1/receipts/" + sale)).json().catch(() => null); }
 rec("receipt settles on-chain with the exact split, credited to the referrer", rcpt?.status === "settled" && rcpt.split.merchant === "84000" && rcpt.split.distributor === "15000" && rcpt.split.protocolFee === "1000" && rcpt.parties.distributor === distributor.publicKey.toBase58() && rcpt.parties.buyer === buyer.publicKey.toBase58(), rcpt ? JSON.stringify(rcpt.split) : "no receipt");
 
+// the receipt tells the buyer what they are looking at, and the buy page remembers the purchase
+await page.goto(`http://localhost:5173${saleLink}`, { waitUntil: "domcontentloaded" });
+rec("receipt shows a buyer-specific note ('This is your purchase')", await page.getByText("This is your purchase.").waitFor({ timeout: 40000 }).then(() => true).catch(() => false));
+rec("timeline says 'Buyer paid' (not the jargon)", await page.getByText("Buyer paid", { exact: true }).first().isVisible().catch(() => false));
+await page.goBack(); await page.waitForTimeout(3000);
+rec("going back: the buy page remembers it ('You already bought this once') and offers Pay again", await page.getByText("You already bought this once").isVisible().catch(() => false) && (await page.getByRole("button", { name: /^Pay again/ }).count()) > 0);
 // plain purchase
 await page.goto(`http://localhost:5173/buy/${CAMPAIGN}`, { waitUntil: "domcontentloaded" });
 await page.getByText("0.100000").first().waitFor({ timeout: 60000 });
 rec("link without ref says no referral", await page.getByText(/No referral on this link/).isVisible());
-await page.getByRole("button", { name: /^Pay 0.100000 USDC/ }).click();
+await page.getByRole("button", { name: /^(Pay again|Pay) 0.100000 USDC/ }).click();
 rec("plain purchase works (merchant paid in full)", await page.getByText("Paid. Here is what you bought").waitFor({ timeout: 90000 }).then(() => true).catch(() => false));
 // self referral
 await page.goto(`http://localhost:5173/buy/${CAMPAIGN}?ref=${buyer.publicKey.toBase58()}`, { waitUntil: "domcontentloaded" });

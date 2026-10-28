@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { st } from "../lib/css";
 import { ApiError, apiGet, explorerAddr, useApi, useCopy, useNow, type Campaign, type Receipt } from "../lib/api";
 import { verifyReceipt, type StepState } from "../lib/verify";
+import { useWallet } from "../lib/wallet-connect";
 import { fmtAmount, fullUtc, mmss, short, pctOf, projectedSplit } from "../lib/format";
 import { isUnderpaid, openText, Addr, CopyIcon, Disclosure, ErrorState, Page, SampleBadge, STATUS_COLORS, TopNav, WakingBanner } from "../components/common";
 
@@ -107,6 +108,7 @@ export default function ReceiptPage() {
   const camp = useApi<Campaign>(r ? `/campaigns/${r.campaign}` : null);
   const now = useNow(1000);
   const [copied, copy] = useCopy();
+  const me = useWallet().address;
 
   const shell = (body: React.ReactNode) => <Page bg="#FAFAFA"><TopNav surface="#FAFAFA" /><main style={st("max-width: 920px; margin: 0 auto; padding: 40px clamp(16px, 4vw, 48px) 96px; display: flex; flex-direction: column; gap: 24px;")}>{body}</main></Page>;
   if (rc.loading) return shell(rc.waking ? <WakingBanner /> : <p role="status" style={st("font-size: 14px; color: #6B6B6B;")}>Loading receipt…</p>);
@@ -157,7 +159,7 @@ export default function ReceiptPage() {
   const txShort = (u: string | null) => { const m = u?.match(/\/tx\/([1-9A-HJ-NP-Za-km-z]+)/); return m ? short(m[1]) : "Pending"; };
   const events = [
     { title: "Sale opened · claim accepted", meta: fullUtc(r.openedAt), tx: r.links.open, dot: dot("#111111", true), last: false },
-    { title: "Paid via x402", meta: "Payment into the sale vault", tx: r.links.payment, dot: dot("#111111", true), last: false },
+    { title: "Buyer paid", meta: "Payment into the sale vault · via the x402 payment protocol", tx: r.links.payment, dot: dot("#111111", true), last: false },
     { title: lastTitle, meta: lastMeta, tx: lastTx, dot: held ? dot("#0058B0", false) : refunded ? dot("#8A4B00", true) : dot("#15B042", true), last: true },
   ];
 
@@ -175,6 +177,17 @@ export default function ReceiptPage() {
           </button>
         </div>
 
+        {me && (me === r.parties.buyer || me === r.parties.merchant || me === r.parties.distributor) && (
+          <div role="note" style={st("display: flex; gap: 10px; align-items: flex-start; padding: 12px 16px; border: 1px solid #B3D4FF; background: rgba(0,88,176,0.05); border-radius: 12px; font-size: 13px; line-height: 20px; color: #333333;")}>
+            <span>
+              {me === r.parties.buyer
+                ? <><strong>This is your purchase.</strong> You paid {f(g)} USDC once. The split below shows where that payment went; the referral and the protocol fee are taken out of the merchant’s share, so they cost you nothing extra. A purchase without a referral costs the same.</>
+                : me === r.parties.distributor
+                  ? <><strong>You are the referrer on this sale.</strong> {refunded ? "It was refunded, so you earn nothing." : held ? `You will receive ${f(split.distributor)} USDC when it settles.` : `You received ${f(split.distributor)} USDC in the transaction that settled it.`}</>
+                  : <><strong>This is your sale as the merchant.</strong> {refunded ? "You refunded it." : held ? `You will receive ${f(split.merchant)} USDC when it settles.` : `You received ${f(split.merchant)} USDC.`}</>}
+            </span>
+          </div>
+        )}
         <article aria-labelledby="rc-h" style={st("background: #FFFFFF; border-radius: 24px; overflow: hidden; " + RING)}>
           <div style={st("padding: clamp(24px, 4vw, 40px); display: flex; flex-direction: column; gap: 32px;")}>
             <div style={st("display: flex; flex-wrap: wrap; gap: 12px; align-items: center;")}>
