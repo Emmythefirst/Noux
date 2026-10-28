@@ -115,7 +115,7 @@ export default function Docs() {
 
             <h2 id="before" style={st(H2)}>Before you start</h2>
             <ul style={st("margin: 0; padding-left: 20px; color: #333333; display: flex; flex-direction: column; gap: 6px;")}>
-              <li>A paid route that already answers x402 on Solana, or a fresh Hono or Express app</li>
+              <li>A paid route that already answers x402 on Solana, or a fresh Express app</li>
               <li>A merchant wallet with a little devnet SOL and devnet USDC for the commission budget</li>
               <li>Node 20 or newer</li>
             </ul>

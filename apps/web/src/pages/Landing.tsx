@@ -236,16 +236,16 @@ export default function Landing() {
           <div style={st("display: grid; grid-template-columns: repeat(auto-fit, minmax(min(460px, 100%), 1fr)); gap: 16px;")}>
             <figure style={st("margin: 0; border: 1px solid #EBEBEB; border-radius: 16px; overflow: hidden; background: #FFFFFF;")}>
               <figcaption style={st("height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 16px; border-bottom: 1px solid #EBEBEB; background: #FAFAFA;")}>
-                <span className="mono" style={st("font-size: 12px; color: #111111;")}>server.ts</span><span style={{ flex: 1 }} /><span style={st("font-size: 12px; color: #6B6B6B;")}>Hono · Node</span>
+                <span className="mono" style={st("font-size: 12px; color: #111111;")}>server.ts</span><span style={{ flex: 1 }} /><span style={st("font-size: 12px; color: #6B6B6B;")}>Express · Node</span>
               </figcaption>
               <pre className="mono" style={st("margin: 0; padding: 20px; font-size: 13px; line-height: 22px; color: #333333; overflow-x: auto;")}>
-                <span style={st("color: #0058B0;")}>import</span>{" { Hono } "}<span style={st("color: #0058B0;")}>from</span> <span style={st("color: #8A4B00;")}>"hono"</span>{";\n"}
+                <span style={st("color: #0058B0;")}>import</span>{" express "}<span style={st("color: #0058B0;")}>from</span> <span style={st("color: #8A4B00;")}>"express"</span>{";\n"}
                 <span style={st("color: #0058B0;")}>import</span>{" { nouxGateway } "}<span style={st("color: #0058B0;")}>from</span> <span style={st("color: #8A4B00;")}>"@noux/gateway"</span>{";\n\n"}
-                <span style={st("color: #0058B0;")}>const</span>{" app = "}<span style={st("color: #0058B0;")}>new</span>{" Hono();\n\n"}
+                <span style={st("color: #0058B0;")}>const</span>{" app = express();\n\n"}
                 <span style={st("background: #F0FDFA; display: inline-block; width: calc(100% + 40px); margin: 0 -20px; padding: 0 20px; border-left: 2px solid #0F766E;")}>
                   {"app.use("}<span style={st("color: #8A4B00;")}>"/v1/brief"</span>{", nouxGateway({\n  campaign: "}<span style={st("color: #8A4B00;")}>"B7DSpwzF…WBWT"</span>{",\n  price: "}<span style={st("color: #8A4B00;")}>"0.10"</span>{",        "}<span style={st("color: #6B6B6B;")}>// USDC, must equal the claim</span>{"\n  network: "}<span style={st("color: #8A4B00;")}>"solana-devnet"</span>{",\n}));"}
                 </span>
-                {"\n\napp.get("}<span style={st("color: #8A4B00;")}>"/v1/brief"</span>{", (c) => c.json(brief()));"}
+                {"\n\napp.get("}<span style={st("color: #8A4B00;")}>"/v1/brief"</span>{", (req, res) => res.json(brief()));"}
               </pre>
             </figure>
             <figure style={st("margin: 0; border: 1px solid #EBEBEB; border-radius: 16px; overflow: hidden; background: #FFFFFF; display: flex; flex-direction: column;")}>

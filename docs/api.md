@@ -14,7 +14,7 @@ snapshots the program's on-chain accounts about every 20 s; `GET /v1/index` repo
 | `GET /v1/stats` | Platform totals, and `protocol` (the on-chain fee config: admin, fee wallet, fee bps, 5% cap). `volumeBySource` splits **sample** (Noux-built demo services) from **listed** and **unlisted** volume: demo volume is never presented as market demand. |
 | `GET /v1/index` | Indexer freshness and last error. |
 | `PUT /v1/campaigns/:address/listing` | Create/update the directory listing. **Merchant-signed** (below). |
-| `POST /v1/claims` | Buyer-signed claim request (see `docs/security.md`). |
+| `POST /v1/claims` | Buyer-signed claim request (see [security.md](security.md)). |
 
 ## Signed listing
 Body: `{ "listing": {name, description, category, endpointUrl, route, displayPrice, website?, isSample}, "ts": <unix s>, "signature": <base64> }`.
