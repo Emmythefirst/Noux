@@ -144,8 +144,9 @@ export default function CampaignPage() {
                 {l?.isSample && <SampleBadge />}
                 <span style={st("height: 20px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; " + (spent ? "background: #FFF1D6; color: #8A4B00;" : "background: #CAFACE; color: #0E7A2F;"))}><Dot color={spent ? "#8A4B00" : "#15B042"} />{spent ? "Budget spent" : "Active"}</span>
               </div>
-              <p style={st("font-size: 14px; line-height: 20px; color: #333333; max-width: 560px;")}>{l ? `${l.description} ${CATEGORIES[l.category] ?? ""}.` : "This campaign is unlisted: its merchant hasn’t published a listing, so it isn’t in the directory. Anyone with the link can still see it. Only promote it if you know and trust the merchant."}</p>
+              <p style={st("font-size: 14px; line-height: 20px; color: #333333; max-width: 560px;")}>{l ? l.description : "This campaign is unlisted: its merchant hasn’t published a listing, so it isn’t in the directory. Anyone with the link can still see it. Only promote it if you know and trust the merchant."}</p>
               <div style={st("display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: #6B6B6B; align-items: center;")}>
+                {l && <span>Category <span style={st("color: #333333;")}>{CATEGORIES[l.category] ?? l.category}</span></span>}
                 <span>Merchant <Addr value={c.merchant} copy style={{ color: "#333333" }} /></span>
                 <span>Campaign <Addr value={c.address} copy style={{ color: "#333333" }} /></span>
                 <a href={explorerAddr(c.address)} target="_blank" rel="noreferrer" style={st("font-size: 13px;")}>Open in explorer ↗</a>
