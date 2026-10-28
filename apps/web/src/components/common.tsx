@@ -106,7 +106,6 @@ export function TopNav({ variant = "app", surface = "#FFFFFF", cta = false }: { 
         {variant === "landing" ? (
           <>
             <DevnetBadge />
-            <Link className="nl hide-sm" to="/app/earnings" style={st("font-size: 14px; color: #6B6B6B;")}>Open app</Link>
             <Link className="press bi" to="/app/merchant" style={st("height: 36px; padding: 0 16px; border-radius: 9999px; background: #111111; color: #FFFFFF; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; white-space: nowrap;")}>Create campaign</Link>
           </>
         ) : (
