@@ -33,13 +33,23 @@ Status: devnet, **no independent audit**. Read this before putting real money ne
 - The website never sees a private key. Every transaction and message is approved in the user's wallet.
 - Receipt verification checks against a Solana node directly. It does not cover transactions that use address lookup tables.
 
+## The buy page (`/buy/<campaign>?ref=<wallet>`)
+
+- **The endpoint, not the listing, sets the price and the payee.** The page reads the amount, asset and `payTo` from the service's own `402` answer and asks for a claim at that price. It does not compare them with the price in the merchant's listing or check the asset. A merchant (or anyone who controls a listed endpoint URL) can therefore ask for more than the listing says, up to the claim service's maximum price. The only safeguards are the wallet's approval prompt, which the buyer must read, and the price shown on the page, which comes from the same `402` answer.
+- **The page does not verify the merchant.** It pays any listed `https` endpoint that answers x402. A listing is a signed claim by that merchant, not an endorsement by Noux.
+- **The referrer is whatever `ref` says.** The link carries a wallet address; nothing proves the referrer shared it. A link can be edited to name a different wallet, and a person can run campaigns by promoting with their own wallet in the link.
+- **Purchase memory is local.** The "you already paid" note is stored in the browser's `localStorage`: clearing site data, using another browser or another device removes it, and the page will let the buyer pay again. The public receipt is the real record.
+- **Browser payments depend on the merchant's CORS headers.** A merchant that does not allow them cannot be bought from the page.
+- **Devnet only.** There is no real-money checkout.
+
 ## Known gaps (not hidden)
 
 - No audit, no formal verification, no bug bounty.
 - Per-IP rate limiting trusts the first `X-Forwarded-For` hop.
 - A commission budget is a cap, not escrow; there is no top-up and no campaign pause/close instruction.
 - Rust unit tests do not exist; the program is tested through TypeScript scripts against a local validator and devnet (22 + 13 + 13 checks, with mutation checks for the fee rules).
-- Real wallet coverage: create, list/edit and refund were confirmed with Phantom on devnet; other wallets are untested.
+- Real wallet coverage: create, list/edit, refund and a buy-page payment were confirmed with Phantom on devnet; other wallets are untested.
+- Untested at scale: the gateway under heavy load, and the merchant console on a phone-sized screen.
 
 ## Reporting
 

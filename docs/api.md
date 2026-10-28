@@ -2,7 +2,7 @@
 
 Read-only except two signed writes. All amounts are strings in the mint's base units (`decimals` is in every response).
 CORS is open (`*`); there are no cookies. Responses are cacheable for a few seconds. Data comes from an indexer that
-snapshots the program's on-chain accounts about every 20 s; `GET /v1/index` reports how fresh it is.
+snapshots the program's on-chain accounts about every 60 s (`INDEXER_INTERVAL_SECONDS`); `GET /v1/index` reports how fresh it is.
 
 | Endpoint | What |
 |---|---|

@@ -54,7 +54,7 @@ Requirements: Node 24, pnpm 11 (`corepack enable`), Docker (for Postgres in test
 ```bash
 pnpm install
 pnpm -r typecheck
-pnpm -r test            # core 12, gateway 45, api 59, demo-merchant 16, web 18 (+4 opt-in live)
+pnpm -r test            # core 12, gateway 45, api 61, demo-merchant 16, web 26 (+4 opt-in live)
 pnpm --filter @noux/web dev        # website on :5173, talks to the live devnet API by default
 ```
 
