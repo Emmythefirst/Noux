@@ -52,6 +52,7 @@ Status: devnet, **no independent audit**. Read this before putting real money ne
 
 ## Known gaps (not hidden)
 
+- The attribution key is a file or environment secret on the host. Moving it into a cloud KMS is researched but not built (see docs/kms-evaluation.md in the repository): AWS KMS and Google Cloud KMS document pure Ed25519; nothing has been tested against a real account yet.
 - No audit, no formal verification, no bug bounty.
 - A commission budget is a cap, not escrow: a merchant can raise it but never lower it. A merchant can pause, resume or permanently end new referral sales (enforced on-chain by `open_sale`); ending never deletes the campaign account, because receipt verification reads it.
 - The attribution key can be rotated by the merchant (effective at once on-chain). Rotating the claim service's OWN key works through an overlap (the service signs with the key each campaign trusts; runbook in docs/deploy.md), but a leaked key stays dangerous for every campaign that has not rotated yet, and merchants must switch themselves.
