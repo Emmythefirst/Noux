@@ -21,7 +21,12 @@ export function createApp(deps: Deps, opts: { trustProxy: boolean; proxyHops?: n
     return peer ?? "unknown";
   };
   // what this service believes your address is, and how many forwarded entries it saw: lets an operator check TRUSTED_PROXY_HOPS against the real proxy chain
-  app.get("/v1/whoami", (c) => c.json({ ip: ipOf(c), forwardedEntries: (c.req.header("x-forwarded-for") ?? "").split(",").filter((x) => x.trim()).length, proxyHops: opts.trustProxy ? (opts.proxyHops ?? 1) : 0, trustProxy: opts.trustProxy }));
+  app.get("/v1/whoami", (c) => {
+    const entries = (c.req.header("x-forwarded-for") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+    const seen = (n: string) => c.req.header(n) ?? null; // only ever the CALLER's own request headers
+    return c.json({ ip: ipOf(c), forwardedEntries: entries.length, forwarded: entries, proxyHops: opts.trustProxy ? (opts.proxyHops ?? 1) : 0, trustProxy: opts.trustProxy,
+      otherClientHeaders: { "x-real-ip": seen("x-real-ip"), "cf-connecting-ip": seen("cf-connecting-ip"), "true-client-ip": seen("true-client-ip"), "x-forwarded-proto": seen("x-forwarded-proto") } });
+  });
   if (opts.public) {
     // coarse per-IP read limiter (in memory; the claim-issuance limits are the Postgres-backed ones)
     const max = opts.readLimitPerMin ?? 240; const hits = new Map<string, { n: number; reset: number }>();
