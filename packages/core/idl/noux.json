@@ -774,6 +774,39 @@
       "args": []
     },
     {
+      "name": "set_attribution_key",
+      "docs": [
+        "Merchant only. Changes which key the campaign trusts to sign claims. Takes effect at once: `open_sale` checks every claim against the key stored here,",
+        "so claims signed by the old key stop working immediately (sales already open are unaffected and settle normally). This is how a merchant reacts to a leaked key."
+      ],
+      "discriminator": [
+        145,
+        210,
+        243,
+        236,
+        5,
+        52,
+        21,
+        16
+      ],
+      "accounts": [
+        {
+          "name": "merchant",
+          "signer": true
+        },
+        {
+          "name": "campaign",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_key",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "settle_sale",
       "docs": [
         "Permissionless. Splits the sale account balance by the stored terms."
@@ -1203,6 +1236,39 @@
       "args": []
     },
     {
+      "name": "top_up_budget",
+      "docs": [
+        "Merchant only. Raises the commission budget (the CAP) by `amount`. Increase-only: lowering a cap would shrink the commission of sales that are",
+        "already in flight, so there is deliberately no way to reduce it. Nothing is locked or moved; this only widens what the campaign may pay out."
+      ],
+      "discriminator": [
+        109,
+        177,
+        243,
+        124,
+        217,
+        10,
+        113,
+        207
+      ],
+      "accounts": [
+        {
+          "name": "merchant",
+          "signer": true
+        },
+        {
+          "name": "campaign",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "update_config",
       "docs": [
         "Admin only. Affects campaigns created AFTERWARDS: each campaign copies the fee at creation and keeps it."
@@ -1300,6 +1366,32 @@
     }
   ],
   "events": [
+    {
+      "name": "AttributionKeyChanged",
+      "discriminator": [
+        206,
+        85,
+        252,
+        100,
+        79,
+        3,
+        206,
+        249
+      ]
+    },
+    {
+      "name": "BudgetRaised",
+      "discriminator": [
+        20,
+        26,
+        214,
+        27,
+        246,
+        213,
+        212,
+        67
+      ]
+    },
     {
       "name": "SaleRefunded",
       "discriminator": [
@@ -1412,9 +1504,64 @@
       "code": 6016,
       "name": "NotAdmin",
       "msg": "signer is not the config admin"
+    },
+    {
+      "code": 6017,
+      "name": "NotMerchant",
+      "msg": "signer is not the campaign merchant"
+    },
+    {
+      "code": 6018,
+      "name": "BadBudgetIncrease",
+      "msg": "budget increase must be greater than zero and must not overflow"
+    },
+    {
+      "code": 6019,
+      "name": "InvalidKey",
+      "msg": "attribution key must not be the all-zero key"
     }
   ],
   "types": [
+    {
+      "name": "AttributionKeyChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "campaign",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_key",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BudgetRaised",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "campaign",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_budget",
+            "type": "u64"
+          },
+          {
+            "name": "new_budget",
+            "type": "u64"
+          }
+        ]
+      }
+    },
     {
       "name": "Campaign",
       "type": {

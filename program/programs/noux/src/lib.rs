@@ -241,6 +241,26 @@ pub mod noux {
         Ok(())
     }
 
+    /// Merchant only. Raises the commission budget (the CAP) by `amount`. Increase-only: lowering a cap would shrink the commission of sales that are
+    /// already in flight, so there is deliberately no way to reduce it. Nothing is locked or moved; this only widens what the campaign may pay out.
+    pub fn top_up_budget(ctx: Context<MerchantControl>, amount: u64) -> Result<()> {
+        let c = &mut ctx.accounts.campaign;
+        let new_budget = raised_budget(c.commission_budget, amount).ok_or(NouxError::BadBudgetIncrease)?;
+        emit!(BudgetRaised { campaign: c.key(), old_budget: c.commission_budget, new_budget });
+        c.commission_budget = new_budget;
+        Ok(())
+    }
+
+    /// Merchant only. Changes which key the campaign trusts to sign claims. Takes effect at once: `open_sale` checks every claim against the key stored here,
+    /// so claims signed by the old key stop working immediately (sales already open are unaffected and settle normally). This is how a merchant reacts to a leaked key.
+    pub fn set_attribution_key(ctx: Context<MerchantControl>, new_key: Pubkey) -> Result<()> {
+        require!(new_key != Pubkey::default(), NouxError::InvalidKey);
+        let c = &mut ctx.accounts.campaign;
+        emit!(AttributionKeyChanged { campaign: c.key(), old_key: c.attribution_key, new_key });
+        c.attribution_key = new_key;
+        Ok(())
+    }
+
     /// Permissionless. Reclaims rent from a sale nobody paid, once its claim has expired.
     /// Only after expiry: a closed sale's nonce can then never be replayed (claim is dead).
     pub fn close_expired_sale(ctx: Context<CloseExpiredSale>) -> Result<()> {
@@ -296,6 +316,12 @@ pub fn compute_split(amount: u64, fee_bps: u16, commission_bps: u16, budget: u64
     let commission = wanted.min(budget.saturating_sub(spent));
     let merchant = amount.checked_sub(fee)?.checked_sub(commission)?;
     Some(Split { merchant, commission, fee })
+}
+
+/// The budget after a top-up: strictly larger, and it must not wrap. `None` for a zero amount or an overflow.
+pub fn raised_budget(current: u64, amount: u64) -> Option<u64> {
+    if amount == 0 { return None; }
+    current.checked_add(amount)
 }
 
 /// Domain-separated claim message: tag | program id | cluster | campaign | distributor |
@@ -459,6 +485,15 @@ pub struct RefundSale<'info> {
     pub token_program: Program<'info, Token>,
 }
 
+/// Merchant-only changes to one campaign (budget top-up, attribution key rotation).
+#[derive(Accounts)]
+pub struct MerchantControl<'info> {
+    #[account(address = campaign.merchant @ NouxError::NotMerchant)]
+    pub merchant: Signer<'info>,
+    #[account(mut)]
+    pub campaign: Box<Account<'info, Campaign>>,
+}
+
 #[derive(Accounts)]
 pub struct CloseExpiredSale<'info> {
     #[account(
@@ -541,6 +576,20 @@ pub struct Sale {
 }
 
 #[event]
+pub struct BudgetRaised {
+    pub campaign: Pubkey,
+    pub old_budget: u64,
+    pub new_budget: u64,
+}
+
+#[event]
+pub struct AttributionKeyChanged {
+    pub campaign: Pubkey,
+    pub old_key: Pubkey,
+    pub new_key: Pubkey,
+}
+
+#[event]
 pub struct SaleRefunded {
     pub sale: Pubkey,
     pub campaign: Pubkey,
@@ -596,6 +645,12 @@ pub enum NouxError {
     NotUpgradeAuthority,
     #[msg("signer is not the config admin")]
     NotAdmin,
+    #[msg("signer is not the campaign merchant")]
+    NotMerchant,
+    #[msg("budget increase must be greater than zero and must not overflow")]
+    BadBudgetIncrease,
+    #[msg("attribution key must not be the all-zero key")]
+    InvalidKey,
 }
 
 #[cfg(test)]
@@ -700,6 +755,18 @@ mod tests {
         // create_campaign requires commission_bps + fee_bps <= 10000; beyond that the split would not fit in the amount
         assert_eq!(compute_split(100, 10_000, 10_000, u64::MAX, 0), None);
         assert!(compute_split(100, 5_000, 5_000, u64::MAX, 0).is_some());
+    }
+
+    #[test]
+    fn top_up_only_ever_increases_and_never_wraps() {
+        assert_eq!(raised_budget(1_000, 500), Some(1_500));
+        assert_eq!(raised_budget(0, 1), Some(1));
+        assert_eq!(raised_budget(1_000, 0), None, "a zero top-up is refused, not silently accepted");
+        assert_eq!(raised_budget(u64::MAX, 1), None, "overflow is refused");
+        assert_eq!(raised_budget(u64::MAX - 5, 5), Some(u64::MAX));
+        assert_eq!(raised_budget(u64::MAX - 5, 6), None);
+        let mut r = Rng(0xABCDEF0123456789);
+        for _ in 0..100_000 { let (c, a) = (r.next(), r.next()); if let Some(n) = raised_budget(c, a) { assert!(n > c, "{c} + {a} = {n} must be larger"); assert_eq!(n as u128, c as u128 + a as u128); } else { assert!(a == 0 || c.checked_add(a).is_none()); } }
     }
 
     #[test]
