@@ -5,7 +5,7 @@ export const MAX_CLAIM_HEADER_BYTES = 2048;
 
 export type ClaimRejection =
   | "missing" | "too_large" | "malformed" | "tampered" | "wrong_program" | "wrong_cluster" | "wrong_campaign"
-  | "wrong_attribution_key" | "price_mismatch" | "expiring" | "self_referral";
+  | "wrong_attribution_key" | "price_mismatch" | "expiring" | "self_referral" | "campaign_not_active";
 
 export type ClaimDecision = { ok: true; claim: SignedClaim } | { ok: false; reason: ClaimRejection };
 

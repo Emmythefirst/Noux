@@ -12,7 +12,7 @@ const programId = Keypair.generate().publicKey, campaign = Keypair.generate().pu
 const merchantPay = Keypair.generate().publicKey;
 const attest = new LocalKeySigner(Keypair.generate().secretKey);
 const PRICE = 100_000n;
-const info = (): CampaignInfo => ({ address: campaign, merchant: merchantPay, mint, feeOwner: Keypair.generate().publicKey, attributionKey: attest.publicKey, cluster: "devnet", holdSecs: 15, commissionBps: 1500, feeBps: 100, commissionBudget: 1n, commissionSpent: 0n, settledCount: 0n, refundedCount: 0n });
+const info = (): CampaignInfo => ({ address: campaign, merchant: merchantPay, mint, feeOwner: Keypair.generate().publicKey, attributionKey: attest.publicKey, cluster: "devnet", holdSecs: 15, commissionBps: 1500, feeBps: 100, commissionBudget: 1n, commissionSpent: 0n, settledCount: 0n, refundedCount: 0n, state: "active" });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const until = async (f: () => boolean, ms = 8000) => { const t0 = Date.now(); while (!f() && Date.now() - t0 < ms) await sleep(20); };
 const hex = (b: Uint8Array) => Buffer.from(b).toString("hex");

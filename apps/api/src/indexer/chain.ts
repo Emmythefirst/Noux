@@ -7,6 +7,8 @@ export type SaleStatus = "open" | "settled" | "refunded";
 export interface CampaignRow {
   address: string; merchant: string; mint: string; feeOwner: string; attributionKey: string; cluster: string; holdSecs: number;
   commissionBps: number; feeBps: number; commissionBudget: string; commissionSpent: string; settledCount: string; refundedCount: string;
+  /** active / paused / ended, from the campaign's control account (none = active) */
+  state: "active" | "paused" | "ended";
 }
 export interface SaleRow {
   address: string; campaign: string; distributor: string; buyer: string; rentPayer: string; price: string; gross: string;
@@ -54,7 +56,22 @@ export function decodeCampaign(address: string, data: Buffer): CampaignRow | nul
     holdSecs: Number(f(c, "hold_secs", "holdSecs")), commissionBps: Number(f(c, "commission_bps", "commissionBps")), feeBps: Number(f(c, "fee_bps", "feeBps")),
     commissionBudget: s(f(c, "commission_budget", "commissionBudget")), commissionSpent: s(f(c, "commission_spent", "commissionSpent")),
     settledCount: s(f(c, "settled_count", "settledCount")), refundedCount: s(f(c, "refunded_count", "refundedCount")),
+    state: "active", // filled in from the control accounts by attachStates()
   };
+}
+
+/** A control account's campaign and state, or null when the data is not a control account. */
+export function decodeControl(data: Buffer): { campaign: string; state: CampaignRow["state"] } | null {
+  let x: any; try { x = coder.decode("CampaignControl", data); } catch { return null; }
+  const k = Object.keys(x.state)[0].toLowerCase();
+  return { campaign: x.campaign.toBase58(), state: k === "paused" ? "paused" : k === "ended" ? "ended" : "active" };
+}
+
+/** Merge control accounts into campaign rows (a campaign with no control account stays active). */
+export function attachStates(campaigns: CampaignRow[], controls: { data: Buffer }[]): void {
+  const by = new Map<string, CampaignRow["state"]>();
+  for (const { data } of controls) { const d = decodeControl(data); if (d) by.set(d.campaign, d.state); }
+  for (const c of campaigns) c.state = by.get(c.address) ?? "active";
 }
 
 export function decodeSale(address: string, data: Buffer): SaleRow | null {
@@ -78,10 +95,11 @@ export class AnchorIndexerChain implements IndexerChain {
 
   async snapshot(): Promise<Snapshot> {
     const slot = await this.conn.getSlot("confirmed");
-    const [cRaw, sRaw] = await Promise.all(["Campaign", "Sale"].map((n) =>
+    const [cRaw, sRaw, ctlRaw] = await Promise.all(["Campaign", "Sale", "CampaignControl"].map((n) =>
       this.conn.getProgramAccounts(this.programId, { commitment: "confirmed", filters: [{ memcmp: { offset: 0, bytes: bs58.encode(disc(n)) } }] })));
     const campaigns: CampaignRow[] = [];
     for (const { pubkey, account } of cRaw) { const c = decodeCampaign(pubkey.toBase58(), account.data); if (c) campaigns.push(c); }
+    attachStates(campaigns, ctlRaw.map((x) => x.account));
     const sales: SaleRow[] = [];
     for (const { pubkey, account } of sRaw) { const x = decodeSale(pubkey.toBase58(), account.data); if (x) sales.push(x); }
     await this.fillVaultAmounts(sales, new Map(campaigns.map((c) => [c.address, c.mint])));
@@ -129,7 +147,10 @@ export class AnchorIndexerChain implements IndexerChain {
     },
     campaigns: async () => {
       const raw = await this.conn.getProgramAccounts(this.programId, { commitment: "confirmed", filters: [{ memcmp: { offset: 0, bytes: bs58.encode(disc("Campaign")) } }] });
-      return raw.flatMap(({ pubkey, account }) => { const c = decodeCampaign(pubkey.toBase58(), account.data); return c ? [c] : []; });
+      const rows = raw.flatMap(({ pubkey, account }) => { const c = decodeCampaign(pubkey.toBase58(), account.data); return c ? [c] : []; });
+      const ctl = await this.conn.getProgramAccounts(this.programId, { commitment: "confirmed", filters: [{ memcmp: { offset: 0, bytes: bs58.encode(disc("CampaignControl")) } }] });
+      attachStates(rows, ctl.map((x) => x.account));
+      return rows;
     },
     sales: async (addresses, mintOf) => {
       const sales: SaleRow[] = [], missing: string[] = [], saleDisc = disc("Sale");

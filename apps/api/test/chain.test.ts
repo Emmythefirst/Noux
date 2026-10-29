@@ -36,8 +36,24 @@ describe("AnchorIndexerChain with real encoded accounts", () => {
     expect(snap.campaigns[0]).toEqual({
       address: addr.toBase58(), merchant: campaignObj.merchant.toBase58(), mint: campaignObj.mint.toBase58(), feeOwner: campaignObj.fee_owner.toBase58(),
       attributionKey: campaignObj.attribution_key.toBase58(), cluster: "devnet", holdSecs: 15, commissionBps: 1500, feeBps: 100,
-      commissionBudget: "1000000", commissionSpent: "15000", settledCount: "3", refundedCount: "1",
+      commissionBudget: "1000000", commissionSpent: "15000", settledCount: "3", refundedCount: "1", state: "active",
     });
+  });
+  it("reads each campaign's state from its control account (real encoded bytes): none = active, Paused, Ended; a control account for another campaign does not leak", async () => {
+    const [a1, a2, a3] = [pk(), pk(), pk()];
+    const ctl = (campaign: PublicKey, st: any) => coder.encode("CampaignControl", { campaign, state: st, bump: 255 });
+    const snap = await run([
+      { pubkey: a1, data: await encodeCampaign(campaignObj) }, { pubkey: a2, data: await encodeCampaign(campaignObj) }, { pubkey: a3, data: await encodeCampaign(campaignObj) },
+      { pubkey: pk(), data: await ctl(a1, { Paused: {} }) }, { pubkey: pk(), data: await ctl(a2, { Ended: {} }) }, { pubkey: pk(), data: await ctl(pk(), { Paused: {} }) },
+    ]);
+    const st = Object.fromEntries(snap.campaigns.map((c) => [c.address, c.state]));
+    expect(st[a1.toBase58()]).toBe("paused"); expect(st[a2.toBase58()]).toBe("ended"); expect(st[a3.toBase58()]).toBe("active");
+  });
+  it("the incremental path reads the same states", async () => {
+    const a1 = pk(); const accts = [{ pubkey: a1, data: await encodeCampaign(campaignObj) }, { pubkey: pk(), data: await coder.encode("CampaignControl", { campaign: a1, state: { Ended: {} }, bump: 1 }) }];
+    const conn: any = { getProgramAccounts: async (_p: PublicKey, cfg: any) => { const want = cfg.filters[0].memcmp.bytes; return accts.filter((a) => bs58.encode(a.data.subarray(0, 8)) === want).map((a) => ({ pubkey: a.pubkey, account: { data: a.data } })); } };
+    const rows = await new AnchorIndexerChain(conn, PROGRAM).incremental.campaigns();
+    expect(rows).toHaveLength(1); expect(rows[0].state).toBe("ended");
   });
   it("normalises sale status casing for ALL variants (the bug the fixtures missed)", async () => {
     const accts = await Promise.all([{ Open: {} }, { Settled: {} }, { Refunded: {} }].map(async (st) => ({ pubkey: pk(), data: await coder.encode("Sale", saleObj(st)) })));

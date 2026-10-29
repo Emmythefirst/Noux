@@ -34,13 +34,13 @@ async function apply(pool: pg.Pool, snap: Snapshot, gone: string[] | null, o: { 
     await c.query("BEGIN");
     for (const k of snap.campaigns) {
       await c.query(
-        `INSERT INTO idx_campaigns (address, merchant, mint, fee_owner, attribution_key, cluster, hold_secs, commission_bps, fee_bps, commission_budget, commission_spent, settled_count, refunded_count, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now())
+        `INSERT INTO idx_campaigns (address, merchant, mint, fee_owner, attribution_key, cluster, hold_secs, commission_bps, fee_bps, commission_budget, commission_spent, settled_count, refunded_count, state, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14, now())
          ON CONFLICT (address) DO UPDATE SET merchant=EXCLUDED.merchant, mint=EXCLUDED.mint, fee_owner=EXCLUDED.fee_owner, attribution_key=EXCLUDED.attribution_key, cluster=EXCLUDED.cluster,
            hold_secs=EXCLUDED.hold_secs, commission_bps=EXCLUDED.commission_bps, fee_bps=EXCLUDED.fee_bps, commission_budget=EXCLUDED.commission_budget, commission_spent=EXCLUDED.commission_spent,
-           settled_count=EXCLUDED.settled_count, refunded_count=EXCLUDED.refunded_count, updated_at=now()
+           settled_count=EXCLUDED.settled_count, refunded_count=EXCLUDED.refunded_count, state=EXCLUDED.state, updated_at=now()
          WHERE EXCLUDED.settled_count >= idx_campaigns.settled_count AND EXCLUDED.refunded_count >= idx_campaigns.refunded_count AND EXCLUDED.commission_spent >= idx_campaigns.commission_spent`, // counters only grow: an older snapshot must not roll them back
-        [k.address, k.merchant, k.mint, k.feeOwner, k.attributionKey, k.cluster, k.holdSecs, k.commissionBps, k.feeBps, k.commissionBudget, k.commissionSpent, k.settledCount, k.refundedCount],
+        [k.address, k.merchant, k.mint, k.feeOwner, k.attributionKey, k.cluster, k.holdSecs, k.commissionBps, k.feeBps, k.commissionBudget, k.commissionSpent, k.settledCount, k.refundedCount, k.state ?? "active"],
       );
     }
     const known = new Map<string, string>((await c.query("SELECT address, status FROM idx_sales")).rows.map((r) => [r.address, r.status]));

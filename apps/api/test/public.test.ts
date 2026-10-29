@@ -18,7 +18,7 @@ const sale = (over: Partial<SaleRow> & { address: string }): SaleRow => ({
   commissionBps: 1500, feeBps: 100, status: "settled", openedAt: NOW - 500, holdUntil: NOW - 485, expiry: NOW + 600, settledAt: NOW - 400, vaultAmount: "0", ...over });
 const camp = (over: Partial<CampaignRow> & { address: string }): CampaignRow => ({
   merchant: merchantKey.publicKey.toBase58(), mint, feeOwner, attributionKey: attest, cluster: "devnet", holdSecs: 15, commissionBps: 1500, feeBps: 100,
-  commissionBudget: "100000", commissionSpent: "20000", settledCount: "3", refundedCount: "1", ...over });
+  commissionBudget: "100000", commissionSpent: "20000", settledCount: "3", refundedCount: "1", state: "active", ...over });
 
 const S1 = kp(), S2 = kp(), S3 = kp(), S4 = kp(), S5 = kp(), SB = kp();
 function snapshot(): Snapshot {
@@ -42,7 +42,7 @@ class FakeChain implements IndexerChain {
   vaultOf(s: string) { return "vault-of-" + s; }
 }
 let chain: FakeChain;
-const info: CampaignInfo = { address: new PublicKey(A), merchant: merchantKey.publicKey, mint: new PublicKey(mint), feeOwner: new PublicKey(feeOwner), attributionKey: new PublicKey(attest), cluster: "devnet", holdSecs: 15, commissionBps: 1500, feeBps: 100, commissionBudget: 1n, commissionSpent: 0n, settledCount: 0n, refundedCount: 0n };
+const info: CampaignInfo = { address: new PublicKey(A), merchant: merchantKey.publicKey, mint: new PublicKey(mint), feeOwner: new PublicKey(feeOwner), attributionKey: new PublicKey(attest), cluster: "devnet", holdSecs: 15, commissionBps: 1500, feeBps: 100, commissionBudget: 1n, commissionSpent: 0n, settledCount: 0n, refundedCount: 0n, state: "active" };
 const reader: CampaignReader = { get: async (a) => (a.toBase58() === A || a.toBase58() === B ? { ...info, address: a } : null) };
 const signer = new LocalKeySigner(Keypair.generate().secretKey);
 const mkApp = (readLimitPerMin?: number) => createApp(
@@ -385,5 +385,32 @@ describe("campaign card carries the attribution key (so a merchant can see what 
   beforeEach(async () => { await syncOnce(pool, chain); });
   it("GET /v1/campaigns/:address includes attributionKey", async () => {
     const r = await get(mkApp(), `/v1/campaigns/${A}`); expect(r.status).toBe(200); expect(r.body.attributionKey).toBe(attest);
+  });
+});
+
+describe("campaign state (pause / end) in the public API", () => {
+  async function seeded(states: Record<string, "active" | "paused" | "ended">) {
+    for (const c of chain.snap.campaigns) c.state = states[c.address] ?? "active";
+    await syncOnce(pool, chain);
+    const app = mkApp(); await putListing(app, A, listing); await putListing(app, B, { ...listing, name: "Second" });
+    return app;
+  }
+  beforeEach(async () => { await syncOnce(pool, chain); });
+  it("the card carries the state; a campaign with no control account is active", async () => {
+    const app = await seeded({ [A]: "paused" });
+    expect((await get(app, `/v1/campaigns/${A}`)).body.state).toBe("paused"); expect((await get(app, `/v1/campaigns/${B}`)).body.state).toBe("active");
+  });
+  it("ended campaigns leave the public directory, paused ones stay (with their state)", async () => {
+    const app = await seeded({ [A]: "ended", [B]: "paused" });
+    const items = (await get(app, "/v1/campaigns")).body.items; expect(items.map((x: any) => x.address)).toEqual([B]); expect(items[0].state).toBe("paused");
+  });
+  it("includeEnded=1 shows them, and a merchant asking for their own campaigns always sees ended ones", async () => {
+    const app = await seeded({ [A]: "ended" });
+    expect((await get(app, "/v1/campaigns?includeEnded=1")).body.items).toHaveLength(2);
+    expect((await get(app, `/v1/campaigns?includeUnlisted=1&merchant=${merchantKey.publicKey.toBase58()}`)).body.items).toHaveLength(2);
+  });
+  it("a state change on-chain reaches the table on the next sync, and back", async () => {
+    const app = await seeded({ [A]: "paused" }); expect((await get(app, `/v1/campaigns/${A}`)).body.state).toBe("paused");
+    for (const c of chain.snap.campaigns) c.state = "active"; await syncOnce(pool, chain); expect((await get(app, `/v1/campaigns/${A}`)).body.state).toBe("active");
   });
 });

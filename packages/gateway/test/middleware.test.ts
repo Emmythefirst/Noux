@@ -11,7 +11,7 @@ const programId = Keypair.generate().publicKey, campaign = Keypair.generate().pu
 const merchantPay = Keypair.generate().publicKey;
 const attest = new LocalKeySigner(Keypair.generate().secretKey);
 const PRICE = 100_000n;
-const info = (): CampaignInfo => ({ address: campaign, merchant: merchantPay, mint, feeOwner: Keypair.generate().publicKey, attributionKey: attest.publicKey, cluster: "devnet", holdSecs: 15, commissionBps: 1500, feeBps: 100, commissionBudget: 1n, commissionSpent: 0n, settledCount: 0n, refundedCount: 0n });
+const info = (): CampaignInfo => ({ address: campaign, merchant: merchantPay, mint, feeOwner: Keypair.generate().publicKey, attributionKey: attest.publicKey, cluster: "devnet", holdSecs: 15, commissionBps: 1500, feeBps: 100, commissionBudget: 1n, commissionSpent: 0n, settledCount: 0n, refundedCount: 0n, state: "active" });
 
 interface Harness { url: string; events: GatewayEvent[]; opened: SignedClaim[]; settled: SignedClaim[]; facCalls: string[]; setPayer(p: string): void; close(): Promise<void>; handlerCalls: () => number; setHandlerStatus(n: number): void }
 async function harness(): Promise<Harness> {
@@ -140,5 +140,33 @@ describe("payer binding and settlement", () => {
     const { r2 } = await get(h, c, true);
     expect(r2!.status).toBe(500);
     expect(h.facCalls).not.toContain("settle"); expect(h.settled.length).toBe(0);
+  });
+});
+
+describe("a paused or ended campaign takes no new referral sales", () => {
+  async function withState(state: () => "active" | "paused" | "ended") {
+    const events: GatewayEvent[] = []; let opens = 0;
+    const gw = createNouxGateway({
+      programId, cluster: "devnet", campaign, mint, network: NET, merchantPayTo: merchantPay, connection: {} as any, campaigns: { get: async () => ({ ...info(), state: state() }) },
+      opener: { ensureOpen: async (c: SignedClaim) => { opens++; return salePda(programId, c.campaign, c.nonce); } }, routes: { "GET /data": { price: PRICE } }, now: () => 1_800_000_000, onEvent: (e) => events.push(e),
+      facilitator: { getSupported: async () => ({ kinds: [{ x402Version: 2, scheme: "exact", network: NET, extra: { feePayer: Keypair.generate().publicKey.toBase58() } }], extensions: [], signers: {} }), verify: async () => ({ isValid: true }), settle: async () => ({ success: true, transaction: "t", network: NET, payer: "p" }) } as any,
+    });
+    const app = express(); app.use(gw.middleware); app.get("/data", (_q, r) => r.json({ ok: true }));
+    const srv = await new Promise<import("node:http").Server>((res) => { const s = app.listen(0, () => res(s)); });
+    const ask = async (c: SignedClaim) => JSON.parse(Buffer.from((await fetch(`http://127.0.0.1:${(srv.address() as AddressInfo).port}/data`, { headers: { [BRAND.claimHeader]: encodeClaimHeader(claimToWire(c)) } })).headers.get("payment-required")!, "base64").toString()).accepts[0].payTo as string;
+    return { ask, events, opens: () => opens, close: () => new Promise<void>((r) => { srv.closeAllConnections?.(); srv.close(() => r()); }) };
+  }
+  for (const st of ["paused", "ended"] as const) {
+    it(`${st}: a valid claim becomes a PLAIN purchase (merchant paid in full), no sale is opened, and the reason is reported`, async () => {
+      const g = await withState(() => st);
+      try {
+        const c = await mkClaim(); expect(await g.ask(c)).toBe(merchantPay.toBase58());
+        expect(g.opens()).toBe(0); expect(g.events.some((e) => e.type === "claim_rejected" && (e as any).reason === "campaign_not_active")).toBe(true);
+      } finally { await g.close(); }
+    });
+  }
+  it("when the campaign is active again the very next claim opens a sale (the gateway follows the chain, it does not remember a pause)", async () => {
+    let st: "active" | "paused" = "paused"; const g = await withState(() => st);
+    try { const c = await mkClaim(); expect(await g.ask(c)).toBe(merchantPay.toBase58()); st = "active"; const c2 = await mkClaim(); expect(await g.ask(c2)).toBe(salePda(programId, c2.campaign, c2.nonce).toBase58()); expect(g.opens()).toBe(1); } finally { await g.close(); }
   });
 });

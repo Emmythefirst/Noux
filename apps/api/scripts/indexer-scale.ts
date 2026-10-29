@@ -17,7 +17,7 @@ await migrate(pool);
 const kp = () => Keypair.generate().publicKey.toBase58();
 const NOW = Math.floor(Date.now() / 1000);
 const C = 100, D = 500, B = 2000;
-const campaigns: CampaignRow[] = Array.from({ length: C }, () => ({ address: kp(), merchant: kp(), mint: kp(), feeOwner: kp(), attributionKey: kp(), cluster: "devnet", holdSecs: 15, commissionBps: 1500, feeBps: 100, commissionBudget: "1000000000", commissionSpent: "0", settledCount: "0", refundedCount: "0" }));
+const campaigns: CampaignRow[] = Array.from({ length: C }, () => ({ address: kp(), merchant: kp(), mint: kp(), feeOwner: kp(), attributionKey: kp(), cluster: "devnet", holdSecs: 15, commissionBps: 1500, feeBps: 100, commissionBudget: "1000000000", commissionSpent: "0", settledCount: "0", refundedCount: "0", state: "active" }));
 const dists = Array.from({ length: D }, kp), buyers = Array.from({ length: B }, kp);
 let counter = 0;
 const mkSale = (): SaleRow => {

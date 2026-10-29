@@ -14,7 +14,7 @@ const pool = createPool(DB);
 const attest = Keypair.generate(); const signer = new LocalKeySigner(attest.secretKey);
 const NOW = 1_800_000_000;
 const campaignKey = Keypair.generate().publicKey;
-const campaignInfo = (over: Partial<CampaignInfo> = {}): CampaignInfo => ({ address: campaignKey, merchant: Keypair.generate().publicKey, mint: Keypair.generate().publicKey, feeOwner: Keypair.generate().publicKey, attributionKey: signer.publicKey, cluster: "devnet", holdSecs: 15, commissionBps: 1500, feeBps: 100, commissionBudget: 1n, commissionSpent: 0n, settledCount: 0n, refundedCount: 0n, ...over });
+const campaignInfo = (over: Partial<CampaignInfo> = {}): CampaignInfo => ({ address: campaignKey, merchant: Keypair.generate().publicKey, mint: Keypair.generate().publicKey, feeOwner: Keypair.generate().publicKey, attributionKey: signer.publicKey, cluster: "devnet", holdSecs: 15, commissionBps: 1500, feeBps: 100, commissionBudget: 1n, commissionSpent: 0n, settledCount: 0n, refundedCount: 0n, state: "active", ...over });
 let registry = new Map<string, CampaignInfo | null>();
 const reader: CampaignReader = { get: async (a) => registry.get(a.toBase58()) ?? null };
 const limits = { LIMIT_PER_DISTRIBUTOR_PER_MIN: 5, LIMIT_PER_BUYER_PER_MIN: 4, LIMIT_PER_CAMPAIGN_PER_MIN: 100, LIMIT_PER_IP_PER_MIN: 100 };
@@ -66,6 +66,17 @@ describe("claim issuance", () => {
     const e = await fail(issueClaim(deps(), request({ buyer, distributor: buyer.publicKey }).req, "1.1.1.1"));
     expect(e.code).toBe("self_referral");
   });
+  for (const st of ["paused", "ended"] as const) {
+    it(`a ${st} campaign gets no claim: 409 campaign_not_active, nothing is recorded and no rate-limit budget is spent`, async () => {
+      const { req } = request();
+      const d = { ...deps(), campaigns: { get: async () => campaignInfo({ state: st }) } } as any;
+      const e = await fail(issueClaim(d, req, "1.1.1.1"));
+      expect(e.status).toBe(409); expect(e.code).toBe("campaign_not_active"); expect(e.message).toMatch(st === "paused" ? /paused/ : /ended/);
+      expect((await pool.query("SELECT count(*)::int n FROM claim_issuance")).rows[0].n).toBe(0);
+      // and once it is active again the very same request is served
+      expect(claimFromWire(await issueClaim(deps(), request().req, "1.1.1.1")).price).toBe(100_000n);
+    });
+  }
   it("rejects unknown campaigns, foreign attribution keys and wrong clusters (all 404)", async () => {
     expect((await fail(issueClaim(deps(), request({ campaign: Keypair.generate().publicKey }).req, "1.1.1.1"))).status).toBe(404);
     registry.set(campaignKey.toBase58(), campaignInfo({ attributionKey: Keypair.generate().publicKey }));

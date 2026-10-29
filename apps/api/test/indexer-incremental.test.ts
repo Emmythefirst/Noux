@@ -22,7 +22,7 @@ class World {
   private tx(keys: string[]) { const e = { signature: "sig" + String(this.seq++).padStart(6, "0"), blockTime: this.t, keys: [...keys, this.kp(), this.kp()] /* noise: wallets, mints, programs */ }; if (this.lateProb > 0 && this.rng.next() < this.lateProb) this.held.push(e); else this.txs.push(e); }
   /** transactions the node indexes late show up now, in their ORIGINAL position (before everything newer) */
   releaseLate(at: number) { if (this.held.length) { this.txs.splice(at, 0, ...this.held); this.held = []; } }
-  newCampaign() { const a = this.kp(); this.campaigns.set(a, { address: a, merchant: this.kp(), mint: this.kp(), feeOwner: this.kp(), attributionKey: this.kp(), cluster: "devnet", holdSecs: 15, commissionBps: 1500, feeBps: 100, commissionBudget: "1000000000", commissionSpent: "0", settledCount: "0", refundedCount: "0" }); this.tx([a]); }
+  newCampaign() { const a = this.kp(); this.campaigns.set(a, { address: a, merchant: this.kp(), mint: this.kp(), feeOwner: this.kp(), attributionKey: this.kp(), cluster: "devnet", holdSecs: 15, commissionBps: 1500, feeBps: 100, commissionBudget: "1000000000", commissionSpent: "0", settledCount: "0", refundedCount: "0", state: "active" }); this.tx([a]); }
   open() { const c = this.rng.pick([...this.campaigns.keys()]); const a = this.kp();
     this.sales.set(a, { address: a, campaign: c, distributor: this.kp(), buyer: this.kp(), rentPayer: this.kp(), price: this.price.toString(), gross: "0", merchantAmount: "0", commissionAmount: "0", feeAmount: "0", commissionBps: 1500, feeBps: 100, status: "open", openedAt: this.t, holdUntil: this.t + 15, expiry: this.t + 600, settledAt: null, vaultAmount: "0" });
     this.vault.set(a, 0n); this.tx([a, c]); }

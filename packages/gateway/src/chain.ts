@@ -1,7 +1,7 @@
 import { Connection, Ed25519Program, Keypair, PublicKey, SystemProgram, SYSVAR_INSTRUCTIONS_PUBKEY } from "@solana/web3.js";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from "@solana/spl-token";
 import * as anchor from "@anchor-lang/core";
-import { idl, salePda, type SignedClaim } from "@noux/core";
+import { controlPda, idl, salePda, type SignedClaim } from "@noux/core";
 import type { LandedCheck } from "./resilient-facilitator";
 
 /** Everything the middleware needs from the chain, behind interfaces so it can be tested without one. */
@@ -45,6 +45,7 @@ export class AnchorChain implements SaleOpener, SaleSettler {
           payer: this.o.gatewayPayer.publicKey, campaign: c.campaign, distributor: c.distributor, buyer: c.buyer, mint: this.o.mint, sale,
           saleVault: this.ata(sale), instructions: SYSVAR_INSTRUCTIONS_PUBKEY, tokenProgram: TOKEN_PROGRAM_ID,
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
+          control: controlPda(this.o.programId, c.campaign), // pause / end: the program refuses new sales unless the campaign is active
         })
         .preInstructions([Ed25519Program.createInstructionWithPublicKey({ publicKey: c.attributionKey.toBytes(), message: c.message, signature: c.signature })])
         .rpc();

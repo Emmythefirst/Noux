@@ -1,13 +1,16 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import { BorshAccountsCoder } from "@anchor-lang/core";
 import { idl } from "./idl";
-import { configPda } from "./pda";
+import { configPda, controlPda } from "./pda";
 
 export interface CampaignInfo {
   address: PublicKey; merchant: PublicKey; mint: PublicKey; feeOwner: PublicKey; attributionKey: PublicKey;
   cluster: string; holdSecs: number; commissionBps: number; feeBps: number;
   commissionBudget: bigint; commissionSpent: bigint; settledCount: bigint; refundedCount: bigint;
+  /** Whether the campaign takes new referral sales. Paused can resume; ended is final. */
+  state: CampaignStatus;
 }
+export type CampaignStatus = "active" | "paused" | "ended";
 /** The global protocol config: fee % and fee wallet for NEW campaigns, and the key allowed to change them. */
 export interface ProtocolConfig { admin: PublicKey; feeOwner: PublicKey; feeBps: number }
 export interface CampaignReader { get(address: PublicKey): Promise<CampaignInfo | null>; config?(): Promise<ProtocolConfig | null>; }
@@ -43,8 +46,14 @@ export class OnchainCampaignReader implements CampaignReader {
     this.#inflight.set(k, p);
     return p;
   }
+  /** Anything that is not a well-formed control account owned by the program means "active"; any state other than an explicit Active is not. */
+  #stateOf(control: { owner: PublicKey; data: Buffer } | null | undefined): CampaignStatus {
+    if (!control || !control.owner.equals(this.programId)) return "active";
+    try { const d: any = coder.decode("CampaignControl", control.data); const k = Object.keys(d.state)[0].toLowerCase(); return k === "paused" ? "paused" : k === "ended" ? "ended" : "active"; } catch { return "active"; }
+  }
   async #fetch(address: PublicKey): Promise<CampaignInfo | null> {
-    const info = await this.conn.getAccountInfo(address, "confirmed");
+    // ONE call reads the campaign and its (possibly absent) control account together
+    const [info, control] = await this.conn.getMultipleAccountsInfo([address, controlPda(this.programId, address)], "confirmed");
     let v: CampaignInfo | null = null;
     // Must be owned by OUR program and decode as a Campaign; anything else is "not a campaign".
     if (info && info.owner.equals(this.programId)) {
@@ -56,6 +65,7 @@ export class OnchainCampaignReader implements CampaignReader {
           commissionBps: Number(c.commission_bps ?? c.commissionBps), feeBps: Number(c.fee_bps ?? c.feeBps),
           commissionBudget: BigInt((c.commission_budget ?? c.commissionBudget).toString()), commissionSpent: BigInt((c.commission_spent ?? c.commissionSpent).toString()),
           settledCount: BigInt((c.settled_count ?? c.settledCount).toString()), refundedCount: BigInt((c.refunded_count ?? c.refundedCount).toString()),
+          state: this.#stateOf(control),
         };
       } catch { v = null; }
     }

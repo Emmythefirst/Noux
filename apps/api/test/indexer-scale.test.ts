@@ -7,7 +7,7 @@ import type { IndexerChain, Snapshot, SaleRow, CampaignRow } from "../src/indexe
 const pool = createPool(process.env.DATABASE_URL_TEST ?? "postgres://postgres:devonly@localhost:54329/noux");
 const kp = () => Keypair.generate().publicKey.toBase58();
 const NOW = 1_800_000_000;
-const camp: CampaignRow = { address: kp(), merchant: kp(), mint: kp(), feeOwner: kp(), attributionKey: kp(), cluster: "devnet", holdSecs: 15, commissionBps: 1500, feeBps: 100, commissionBudget: "1000000000", commissionSpent: "0", settledCount: "0", refundedCount: "0" };
+const camp: CampaignRow = { address: kp(), merchant: kp(), mint: kp(), feeOwner: kp(), attributionKey: kp(), cluster: "devnet", holdSecs: 15, commissionBps: 1500, feeBps: 100, commissionBudget: "1000000000", commissionSpent: "0", settledCount: "0", refundedCount: "0", state: "active" };
 let n = 0;
 const sale = (over: Partial<SaleRow> = {}): SaleRow => ({ address: kp(), campaign: camp.address, distributor: kp(), buyer: kp(), rentPayer: kp(), price: "100000", gross: "100000", merchantAmount: "84000", commissionAmount: "15000", feeAmount: "1000", commissionBps: 1500, feeBps: 100, status: "settled", openedAt: NOW - 1000 + n, holdUntil: NOW - 990 + n, expiry: NOW + 600, settledAt: NOW - 500 - n++, vaultAmount: "0", ...over });
 
