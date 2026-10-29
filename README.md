@@ -40,7 +40,7 @@ Without a valid claim a call is a plain purchase: the merchant is paid in full a
 - Pilot merchants. None yet.
 - Real-money checkout. The buy page (`/buy/<campaign>?ref=<wallet>`) lets a person pay with a wallet, but only on devnet and only for GET endpoints that allow browser payments. There is no `noux.so` short domain.
 - Published packages. `@noux/gateway` is a workspace package, not on npm; the `npx noux …` commands in the docs page show intended names.
-- A commission budget that is escrowed. It is a **cap** (nothing is locked); a merchant can raise it (never lower it) but there is no pause or close instruction.
+- A commission budget that is escrowed. It is a **cap** (nothing is locked); a merchant can raise it (never lower it), pause or resume referral sales, or end the campaign for good.
 - Abuse resistance beyond rate limits and public metrics: see [docs/security.md](docs/security.md) for what is and is not protected.
 
 ## Prior art
@@ -54,7 +54,7 @@ Requirements: Node 24, pnpm 11 (`corepack enable`), Docker (for Postgres in test
 ```bash
 pnpm install
 pnpm -r typecheck
-pnpm -r test            # core 18, gateway 81, api 93, demo-merchant 16, web 44 (+8 opt-in live), Rust 10
+pnpm -r test            # core 20, gateway 84, api 101, demo-merchant 16, web 46 (+8 opt-in live), Rust 12
 pnpm --filter @noux/web dev        # website on :5173, talks to the live devnet API by default
 ```
 

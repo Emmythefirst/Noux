@@ -3,6 +3,7 @@ What changed, newest first. Dates are 2026 and times are not recorded. This is d
 ## Oct 29
 
 - **Merchants can add budget and change the claim key.** Two new merchant-only program instructions: `top_up_budget` raises a campaign's commission cap (increase-only; a campaign that ran out of budget pays commission again) and `set_attribution_key` changes the key the campaign trusts, effective at once. Console buttons: Add budget, Change claim key.
+- **Pause, resume and end a campaign.** A merchant can stop new referral sales (pause, reversible) or end a campaign for good. The program itself enforces it in `open_sale`; open sales still settle and refund, buyers can still buy without a referral, and ended campaigns leave the public directory.
 - The public API and the buy page got safer: per-IP limits can no longer be walked around by forging a forwarded address, and the buy page checks the service's price, token and network against the campaign and its listing before it asks the wallet to pay.
 - The gateway, the claim service, the keeper and the indexer were load-tested against real devnet purchases and several bugs found by that were fixed (see the deployment notes).
 

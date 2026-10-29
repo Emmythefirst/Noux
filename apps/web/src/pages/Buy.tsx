@@ -118,6 +118,8 @@ export default function Buy() {
   const mismatch = price ? checkRequirement(price, { campaignMint: c.mint, decimals: c.decimals, chain: CHAIN, displayPrice: l.displayPrice }) : null;
   const canPay = !!w.address && !!price && !busy && isGet && !mismatch;
   const selfRef = !!w.address && ref !== "" && w.address === ref;
+  const inactive = (c.state ?? "active") !== "active"; // paused or ended: the program refuses new referral sales, so a referred purchase is not offered
+  const refOk = ref !== "" && !selfRef && !inactive;
 
   return shell(
     <>
@@ -154,11 +156,12 @@ export default function Buy() {
             )}
             <div className="tn" style={st("font-size: 12px; color: #6B6B6B;")}>Paying from <span className="mono">{short(w.address)}</span> · devnet USDC balance {balance === null ? "…" : fmtAmount(balance)}</div>
             {short$ && <p role="alert" style={st("font-size: 13px; line-height: 18px; color: #8A4B00;")}>Your wallet has less devnet USDC than the price. Get free test USDC from <a href={FAUCET} target="_blank" rel="noreferrer">faucet.circle.com</a> (choose Solana Devnet and paste your address), then try again.</p>}
+            {inactive && <p role="status" style={st("font-size: 13px; line-height: 19px; color: #8A4B00; background: #FFF1D6; border-radius: 8px; padding: 10px 12px;")}>{c.state === "ended" ? "This campaign has ended, so no referral can be credited." : "The merchant has paused promotions, so no referral can be credited right now."} You can still buy without a referral at the same price.</p>}
             {selfRef && <p role="alert" style={st("font-size: 13px; line-height: 18px; color: #8A4B00;")}>This is your own referral link: you can’t refer yourself, so the referral won’t count. You can still buy without it.</p>}
             {!isGet && <p role="alert" style={st("font-size: 13px; color: #B42318;")}>This service isn’t a simple GET request, so it can’t be bought from this page.</p>}
             <div style={st("display: flex; gap: 8px; flex-wrap: wrap;")}>
-              {ref && !selfRef && <button className="press bp" type="button" disabled={!canPay} onClick={() => void buy("referred")} style={{ ...st("height: 44px; padding: 0 20px; border: 0; border-radius: 9999px; background: #0F766E; color: #FFFFFF; font: 500 15px Inter, sans-serif; cursor: pointer;"), opacity: canPay ? 1 : 0.5 }}>{busy ? "Working…" : `${past.length ? "Pay again" : "Pay"} ${price ? fmtAmount(price.amount) : ""} USDC`}</button>}
-              <button className={ref && !selfRef ? "press bs" : "press bp"} type="button" disabled={!canPay} onClick={() => void buy("plain")} style={{ ...st(ref && !selfRef ? "height: 44px; padding: 0 20px; border-radius: 9999px; background: #FFFFFF; color: #111111; border: 1px solid #D4D4D8; font: 500 15px Inter, sans-serif; cursor: pointer;" : "height: 44px; padding: 0 20px; border: 0; border-radius: 9999px; background: #0F766E; color: #FFFFFF; font: 500 15px Inter, sans-serif; cursor: pointer;"), opacity: canPay ? 1 : 0.5 }}>{ref && !selfRef ? "Buy without the referral" : busy ? "Working…" : `${past.length ? "Pay again" : "Pay"} ${price ? fmtAmount(price.amount) : ""} USDC`}</button>
+              {refOk && <button className="press bp" type="button" disabled={!canPay} onClick={() => void buy("referred")} style={{ ...st("height: 44px; padding: 0 20px; border: 0; border-radius: 9999px; background: #0F766E; color: #FFFFFF; font: 500 15px Inter, sans-serif; cursor: pointer;"), opacity: canPay ? 1 : 0.5 }}>{busy ? "Working…" : `${past.length ? "Pay again" : "Pay"} ${price ? fmtAmount(price.amount) : ""} USDC`}</button>}
+              <button className={refOk ? "press bs" : "press bp"} type="button" disabled={!canPay} onClick={() => void buy("plain")} style={{ ...st(refOk ? "height: 44px; padding: 0 20px; border-radius: 9999px; background: #FFFFFF; color: #111111; border: 1px solid #D4D4D8; font: 500 15px Inter, sans-serif; cursor: pointer;" : "height: 44px; padding: 0 20px; border: 0; border-radius: 9999px; background: #0F766E; color: #FFFFFF; font: 500 15px Inter, sans-serif; cursor: pointer;"), opacity: canPay ? 1 : 0.5 }}>{refOk ? "Buy without the referral" : busy ? "Working…" : `${past.length ? "Pay again" : "Pay"} ${price ? fmtAmount(price.amount) : ""} USDC`}</button>
             </div>
           </>
         )}

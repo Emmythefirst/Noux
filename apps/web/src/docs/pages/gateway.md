@@ -49,6 +49,6 @@ Noux's buy page pays your route from the visitor's browser. For that your server
 
 ## Claim rejection reasons
 
-`missing`, `too_large`, `malformed`, `tampered`, `wrong_program`, `wrong_cluster`, `wrong_campaign`, `wrong_attribution_key`, `price_mismatch`, `expiring` (less than 2 minutes of life left), `self_referral`. Each one results in a plain purchase and is reported through `onEvent`.
+`missing`, `too_large`, `malformed`, `tampered`, `wrong_program`, `wrong_cluster`, `wrong_campaign`, `wrong_attribution_key`, `price_mismatch`, `expiring` (less than 2 minutes of life left), `self_referral`, `campaign_not_active` (the campaign is paused or ended: no sale is opened and the buyer is charged as a plain purchase). Each one results in a plain purchase and is reported through `onEvent`.
 
 > **Warning** Price and payer checks happen in the gateway, not on-chain. If you serve a paid route without the gateway, those protections do not apply. Attribution and the split still follow the on-chain terms.

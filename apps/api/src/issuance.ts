@@ -48,7 +48,7 @@ export async function issueClaim(d: Deps, req: ClaimRequest, ip: string): Promis
   if (!info.attributionKey.equals(d.signer.publicKey)) throw new IssuanceError(404, "campaign_not_found", "campaign does not use this attribution service");
   if (info.cluster !== d.cfg.CLUSTER) throw new IssuanceError(404, "campaign_not_found", "campaign is on a different cluster");
   // the program refuses new sales on a paused or ended campaign, so a claim for it would be dead on arrival: say so instead of issuing it
-  if (info.state !== "active") throw new IssuanceError(409, "campaign_not_active", info.state === "paused" ? "this campaign is paused: it takes no new referral sales right now" : "this campaign has ended and takes no new referral sales");
+  if ((info.state ?? "active") !== "active") throw new IssuanceError(409, "campaign_not_active", info.state === "paused" ? "this campaign is paused: it takes no new referral sales right now" : "this campaign has ended and takes no new referral sales");
 
   const nonce = crypto.randomBytes(32); // server-chosen: clients cannot grind or reuse nonces
   const expiry = now + d.cfg.CLAIM_TTL_SECS;

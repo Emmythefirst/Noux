@@ -81,7 +81,8 @@ export function createNouxGateway(cfg: NouxGatewayConfig) {
     const info = await cfg.campaigns.get(cfg.campaign).catch(() => null);
     if (!info) { emit({ type: "claim_rejected", route: routeKey, reason: "wrong_campaign" }); return merchant; }
     // a paused or ended campaign takes no new referral sales: answer with a plain purchase at once instead of sending an open_sale the program would refuse
-    if (info.state !== "active") { emit({ type: "claim_rejected", route: routeKey, reason: "campaign_not_active" }); return merchant; }
+    // (a reader that does not report a state means active: the program is the authority, this check only saves a doomed transaction)
+    if ((info.state ?? "active") !== "active") { emit({ type: "claim_rejected", route: routeKey, reason: "campaign_not_active" }); return merchant; }
     const d = evaluateClaim(header, {
       programId: cfg.programId, cluster: cfg.cluster, campaign: cfg.campaign, attributionKey: info.attributionKey,
       routePrice: spec.price, nowSec: now(), minLifeSecs: cfg.minClaimLifeSecs ?? 120,

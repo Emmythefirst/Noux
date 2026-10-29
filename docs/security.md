@@ -53,7 +53,7 @@ Status: devnet, **no independent audit**. Read this before putting real money ne
 ## Known gaps (not hidden)
 
 - No audit, no formal verification, no bug bounty.
-- A commission budget is a cap, not escrow: a merchant can raise it but never lower it, and there is no campaign pause or close instruction yet.
+- A commission budget is a cap, not escrow: a merchant can raise it but never lower it. A merchant can pause, resume or permanently end new referral sales (enforced on-chain by `open_sale`); ending never deletes the campaign account, because receipt verification reads it.
 - The attribution key can be rotated by the merchant (effective at once on-chain). Rotating the Noux claim service's own key still needs a short overlap in which the service signs for both keys; that is not built.
 - The settlement arithmetic and claim message have Rust unit tests (`cargo test -p noux --lib`, 9 tests: the split sums exactly and respects the fee, rate and budget rules over 500,000 generated cases plus edges, checked against a second algorithm; the 197-byte claim layout; the upgrade-authority parser). Mutation-checked: five deliberate arithmetic and claim-message bugs were each caught. Instructions and account checks are still tested only through TypeScript scripts against a local validator and devnet (22 + 11 + 13 + 13 checks).
 - Real wallet coverage: create, list/edit, refund and a buy-page payment were confirmed with Phantom on devnet; Solflare, Backpack and every other wallet are untested (only a Wallet Standard mock was run), and so is anything on mainnet.

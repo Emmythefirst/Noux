@@ -11,7 +11,7 @@ import { createDemoApp, ROUTES, SAMPLE_NOTICE } from "../src/app";
 const NET = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
 const programId = Keypair.generate().publicKey, campaign = Keypair.generate().publicKey, mint = Keypair.generate().publicKey, merchantPay = Keypair.generate().publicKey;
 const attest = new LocalKeySigner(Keypair.generate().secretKey);
-const info = (): CampaignInfo => ({ address: campaign, merchant: merchantPay, mint, feeOwner: Keypair.generate().publicKey, attributionKey: attest.publicKey, cluster: "devnet", holdSecs: 15, commissionBps: 1500, feeBps: 100, commissionBudget: 1n, commissionSpent: 0n, settledCount: 0n, refundedCount: 0n });
+const info = (): CampaignInfo => ({ address: campaign, merchant: merchantPay, mint, feeOwner: Keypair.generate().publicKey, attributionKey: attest.publicKey, cluster: "devnet", holdSecs: 15, commissionBps: 1500, feeBps: 100, commissionBudget: 1n, commissionSpent: 0n, settledCount: 0n, refundedCount: 0n, state: "active" });
 
 let server: Server | undefined;
 afterEach(async () => { await new Promise((r) => (server ? server.close(() => r(null)) : r(null))); server = undefined; });

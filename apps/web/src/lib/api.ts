@@ -12,6 +12,8 @@ export interface Campaign {
   address: string; merchant: string; mint: string; decimals: number; cluster: string;
   commissionBps: number; feeBps: number; holdSecs: number;
   attributionKey?: string;
+  /** active takes referral sales; paused can resume; ended is final. Absent on an older API = active. */
+  state?: "active" | "paused" | "ended";
   feeOwner: string; feeEnforced: boolean | null;
   budget: { total: string; spent: string; remaining: string };
   status: "active" | "budget_exhausted";

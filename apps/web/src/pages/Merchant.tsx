@@ -15,7 +15,7 @@ import { ThemeToggle } from "../lib/theme";
 import { SettingsPanel } from "./Settings";
 import { isPubkey, useWalletAddress } from "../lib/wallet";
 import { AppSidebar, ViewingBar, WalletForm } from "../components/appshell";
-import { isUnderpaid, openText, DevnetBadge, Dot, ErrorState, Freshness, SampleBadge, SaleBadge, WakingBanner } from "../components/common";
+import { isUnderpaid, openText, DevnetBadge, Dot, ErrorState, Freshness, SampleBadge, SaleBadge, StateBadge, WakingBanner } from "../components/common";
 
 const H2 = "font-size: 16px; line-height: 20px; letter-spacing: -0.01em; font-weight: 500; color: #111111;";
 const SAMPLE_MERCHANT = "4Gb6hyx49dTZN1p1dagrcJne5tYNxYqaDXJZVkb29nT7"; // the Noux demo merchant wallet
@@ -384,7 +384,7 @@ export default function Merchant() {
             const tot = BigInt(c.budget.total), pctLeft = tot > 0n ? Number((BigInt(c.budget.remaining) * 1000n) / tot) / 10 : 0;
             return (
               <tr key={c.address} className="rh" style={st("height: 52px;")}>
-                <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; white-space: nowrap;")}><Link to={`/campaigns/${c.address}`} style={st("color: #111111; font-weight: 500;")}>{c.listing?.name ?? "Unlisted campaign"}</Link>{c.listing?.isSample && <SampleBadge style={{ marginLeft: 6 }} />} <span className="mono" style={st("font-size: 12px; color: #6B6B6B; margin-left: 6px;")}>{short(c.address)}</span></td>
+                <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; white-space: nowrap;")}><Link to={`/campaigns/${c.address}`} style={st("color: #111111; font-weight: 500;")}>{c.listing?.name ?? "Unlisted campaign"}</Link>{c.listing?.isSample && <SampleBadge style={{ marginLeft: 6 }} />}<StateBadge state={c.state} style={{ marginLeft: 6 }} /> <span className="mono" style={st("font-size: 12px; color: #6B6B6B; margin-left: 6px;")}>{short(c.address)}</span></td>
                 {td(<span style={st("height: 20px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; " + (c.status === "active" ? "background: #CAFACE; color: #0E7A2F;" : "background: #FFF1D6; color: #8A4B00;"))}>{c.status === "active" ? "Active" : "Budget spent"}</span>)}
                 {td(`${(c.commissionBps / 100).toFixed(c.commissionBps % 100 ? 2 : 0)}%`, { right: true })}
                 {td(<>{(c.feeBps / 100).toFixed(c.feeBps % 100 ? 2 : 0)}%{c.feeEnforced === false ? <span style={st("color: #6B6B6B;")}> legacy</span> : null}</>, { right: true })}

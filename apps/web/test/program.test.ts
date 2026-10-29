@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import { BorshInstructionCoder } from "@anchor-lang/core";
 import { Keypair, PublicKey } from "@solana/web3.js";
-import { DISC, USDC_MINT, ata, campaignPda, canonicalListing, configPda, createCampaignIx, listingMessage, parseAmount, refundSaleIx, setAttributionKeyIx, topUpBudgetIx, PROGRAM_ID } from "../src/lib/program";
+import { DISC, USDC_MINT, ata, campaignPda, canonicalListing, configPda, createCampaignIx, listingMessage, parseAmount, refundSaleIx, setAttributionKeyIx, setCampaignStateIx, controlPda, topUpBudgetIx, PROGRAM_ID } from "../src/lib/program";
 
 const idl = JSON.parse(fs.readFileSync(new URL("../../../packages/core/idl/noux.json", import.meta.url), "utf8"));
 const coder = new BorshInstructionCoder(idl);
@@ -10,7 +10,7 @@ const k = () => Keypair.generate().publicKey;
 
 describe("instruction builders agree with the generated IDL", () => {
   it("discriminators are the IDL's", () => {
-    for (const [name, key] of [["create_campaign", "createCampaign"], ["refund_sale", "refundSale"], ["top_up_budget", "topUpBudget"], ["set_attribution_key", "setAttributionKey"]] as const)
+    for (const [name, key] of [["create_campaign", "createCampaign"], ["refund_sale", "refundSale"], ["top_up_budget", "topUpBudget"], ["set_attribution_key", "setAttributionKey"], ["set_campaign_state", "setCampaignState"]] as const)
       expect(Array.from(DISC[key])).toEqual(idl.instructions.find((i: any) => i.name === name).discriminator);
   });
   it("create_campaign data is byte-identical to Anchor's encoding, and accounts follow the IDL order", () => {
@@ -77,5 +77,21 @@ describe("top_up_budget and set_attribution_key builders", () => {
     expect(Buffer.from(ix.data).toString("hex")).toBe(coder.encode("set_attribution_key", { new_key: key }).toString("hex"));
     expect(idl.instructions.find((i: any) => i.name === "set_attribution_key").accounts.map((x: any) => x.name)).toEqual(["merchant", "campaign"]);
     expect(() => setAttributionKeyIx({ merchant: m, campaign: c, newKey: PublicKey.default })).toThrow(/all-zero/);
+  });
+});
+
+describe("set_campaign_state builder", () => {
+  it("data is byte-identical to Anchor's encoding for every state, and the accounts follow the IDL", () => {
+    const [m, c] = [k(), k()];
+    for (const [name, variant] of [["active", "Active"], ["paused", "Paused"], ["ended", "Ended"]] as const) {
+      const ix = setCampaignStateIx({ merchant: m, campaign: c, state: name });
+      expect(Buffer.from(ix.data).toString("hex")).toBe(coder.encode("set_campaign_state", { state: { [variant]: {} } }).toString("hex"));
+    }
+    expect(idl.instructions.find((i: any) => i.name === "set_campaign_state").accounts.map((x: any) => x.name)).toEqual(["merchant", "campaign", "control", "system_program"]);
+    const ix = setCampaignStateIx({ merchant: m, campaign: c, state: "paused" });
+    expect(ix.keys.map((x) => [x.pubkey.toBase58(), x.isSigner, x.isWritable])).toEqual([[m.toBase58(), true, true], [c.toBase58(), false, false], [controlPda(c).toBase58(), false, true], [PublicKey.default.toBase58(), false, false]]);
+  });
+  it("the control address is derived exactly as the program does (seeds: 'control', campaign)", () => {
+    const c = k(); expect(controlPda(c).toBase58()).toBe(PublicKey.findProgramAddressSync([Buffer.from("control"), c.toBuffer()], PROGRAM_ID)[0].toBase58());
   });
 });

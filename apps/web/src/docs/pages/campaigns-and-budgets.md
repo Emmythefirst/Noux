@@ -18,7 +18,14 @@ The commission budget limits how much commission the campaign can ever pay. Noth
 
 **Adding budget.** The merchant can raise the cap at any time (**Add budget** on the Budget page or the campaign page). It can only go up: lowering a cap would shrink the commission of sales already in flight, so there is deliberately no way to do it. Adding budget moves no funds. A campaign that ran out of budget starts paying commission again as soon as it is topped up.
 
-There is no pause or close instruction yet. The merchant console's **Budget** page shows, per campaign, the cap, what has been paid out, what is left and an estimate of how many more sales it covers.
+The merchant console's **Budget** page shows, per campaign, the cap, what has been paid out, what is left and an estimate of how many more sales it covers.
+
+## Pausing and ending
+
+- **Pause promotions** stops NEW referral sales on the campaign right away, enforced by the program itself (not only by the gateway): `open_sale` refuses unless the campaign is active. Buyers can still buy from you without a referral and you are paid in full. Sales that were already open settle normally and can still be refunded. **Resume promotions** reopens referral sales at once. The first pause creates a small on-chain record (under 0.002 SOL, paid by your wallet); campaigns that were never paused have none.
+- **End campaign** is permanent. The campaign takes no new referral sales and can never be resumed or paused again. Open sales still settle, past receipts stay public and verifiable (the campaign account is never deleted, because receipt verification reads it), and you can still raise the budget or change the claim key. To promote the service again, create a new campaign. Ended campaigns leave the public directory.
+- While a campaign is paused or ended the claim service answers a claim request with `409 campaign_not_active` and a gateway treats a referred request as a plain purchase.
+- The gateway and claim service learn the state within about 15 seconds; the program enforces it immediately.
 
 ## The claim key
 

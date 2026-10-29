@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { st } from "../lib/css";
 import { useApi, useIndexFreshness, type Campaign, type Page as ApiPage, type Stats } from "../lib/api";
 import { CATEGORIES, bpsPct, fmt2, fmtAmount, initials, short } from "../lib/format";
-import { Disclosure, ErrorState, Freshness, Page, SampleBadge, SkeletonCards, TopNav, WakingBanner } from "../components/common";
+import { Disclosure, ErrorState, Freshness, Page, SampleBadge, SkeletonCards, StateBadge, TopNav, WakingBanner } from "../components/common";
 
 const CAT_CHIPS: [string, string | null][] = [["All", null], ["AI and text", "ai-text"], ["Research and search", "research-search"], ["Data feeds", "data-feeds"], ["Developer tools", "developer-tools"]];
 const SORTS: [string, string][] = [["newest", "Newest"], ["commission", "Highest commission"], ["volume", "Most settled volume"]];
@@ -28,7 +28,7 @@ function CampaignCard({ c }: { c: Campaign }) {
           <div style={st("flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;")}>
             <div style={st("display: flex; align-items: center; gap: 8px; flex-wrap: wrap;")}>
               <h2 style={st("font-size: 16px; line-height: 20px; letter-spacing: -0.01em; font-weight: 500; color: #111111;")}>{name}</h2>
-              {l?.isSample && <SampleBadge />}
+              {l?.isSample && <SampleBadge />}<StateBadge state={c.state} />
             </div>
             <span style={st("font-size: 13px; color: #6B6B6B;")}>{l ? CATEGORIES[l.category] ?? l.category : "—"} · <span className="mono" style={st("font-size: 12px;")}>{short(c.merchant)}</span></span>
           </div>

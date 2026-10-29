@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { st } from "../lib/css";
 import { ApiError, explorerAddr, useApi, useCopy, useIndexFreshness, useNow, type CampaignDetail, type Page as ApiPage, type Receipt } from "../lib/api";
@@ -7,8 +7,8 @@ import { isPubkey, useWalletAddress } from "../lib/wallet";
 import { referralLink } from "../lib/buy";
 import { useWallet } from "../lib/wallet-connect";
 import { ListingModal } from "../components/listing-modal";
-import { RotateKeyDialog, TopUpDialog } from "../components/campaign-controls";
-import { Addr, isUnderpaid, openText, Disclosure, Dot, ErrorState, Page, SaleBadge, SampleBadge, TopNav, WakingBanner } from "../components/common";
+import { RotateKeyDialog, StateDialog, TopUpDialog } from "../components/campaign-controls";
+import { Addr, isUnderpaid, openText, Disclosure, Dot, ErrorState, Page, SaleBadge, SampleBadge, StateBadge, TopNav, WakingBanner } from "../components/common";
 
 const H2 = "font-size: 16px; line-height: 20px; letter-spacing: -0.01em; font-weight: 500; color: #111111;";
 const RING = "box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 1px 1px -.5px rgb(0 0 0 / .06), 0 3px 3px -1.5px rgb(0 0 0 / .06), 0 6px 6px -3px rgb(0 0 0 / .06), 0 12px 12px -6px rgb(0 0 0 / .06);";
@@ -100,9 +100,11 @@ export default function CampaignPage() {
   const now = useNow(1000);
   const me = useWallet().address;
   const [listing, setListing] = useState(false);
-  const [controls, setControls] = useState<null | "topup" | "key">(null);
+  const [controls, setControls] = useState<null | "topup" | "key" | "pause" | "resume" | "end">(null);
+  const [stateOverride, setStateOverride] = useState<"active" | "paused" | "ended" | null>(null); // shown at once; the index catches up within a minute
   const [note, setNote] = useState<string | null>(null);
   const c = camp.data;
+  useEffect(() => { if (stateOverride && c?.state === stateOverride) setStateOverride(null); }, [c?.state, stateOverride]); // the index agrees now: drop the local override
   const chart = useMemo(() => dailyCounts(sales.data?.items ?? [], Date.now()), [sales.data]);
 
   if (camp.loading) return <Page><TopNav /><main style={st("max-width: 1280px; margin: 0 auto; padding: 32px clamp(16px, 4vw, 48px);")}>{camp.waking ? <WakingBanner /> : <p role="status" style={st("font-size: 14px; color: #6B6B6B;")}>Loading campaign…</p>}</main></Page>;
@@ -147,7 +149,7 @@ export default function CampaignPage() {
             <div style={st("display: flex; flex-direction: column; gap: 8px;")}>
               <div style={st("display: flex; align-items: center; gap: 10px; flex-wrap: wrap;")}>
                 <h1 style={st("font-size: 32px; line-height: 36px; letter-spacing: -0.025em; font-weight: 500; color: #111111;")}>{name}</h1>
-                {l?.isSample && <SampleBadge />}
+                {l?.isSample && <SampleBadge />}<StateBadge state={stateOverride ?? c.state} />
                 <span style={st("height: 20px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; " + (spent ? "background: #FFF1D6; color: #8A4B00;" : "background: #CAFACE; color: #0E7A2F;"))}><Dot color={spent ? "#8A4B00" : "#15B042"} />{spent ? "Budget spent" : "Active"}</span>
               </div>
               <p style={st("font-size: 14px; line-height: 20px; color: #333333; max-width: 560px;")}>{l ? l.description : "This campaign is unlisted: its merchant hasn’t published a listing, so it isn’t in the directory. Anyone with the link can still see it. Only promote it if you know and trust the merchant."}</p>
@@ -159,10 +161,15 @@ export default function CampaignPage() {
               </div>
             </div>
           </div>
+          {(stateOverride ?? c.state) === "paused" && <p role="status" style={st("width: 100%; font-size: 13px; line-height: 19px; color: #8A4B00; background: #FFF1D6; border-radius: 8px; padding: 10px 12px;")}>The merchant has paused promotions. No new referral sales are being opened right now; you can still buy without a referral, and referral links resume working if the merchant resumes.</p>}
+          {(stateOverride ?? c.state) === "ended" && <p role="status" style={st("width: 100%; font-size: 13px; line-height: 19px; color: #333333; background: #F4F4F5; border-radius: 8px; padding: 10px 12px;")}>This campaign has ended. It takes no new referral sales and will not reopen. Past receipts stay public and verifiable.</p>}
           <div style={st("display: flex; gap: 8px; flex-wrap: wrap;")}>
           {me && me === c.merchant && <button className="press bs" type="button" onClick={() => setListing(true)} style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 14px Inter, sans-serif; cursor: pointer;")}>{c.listing ? "Edit listing" : "List this campaign"}</button>}
           {me && me === c.merchant && <button className="press bs" type="button" onClick={() => setControls("topup")} style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 14px Inter, sans-serif; cursor: pointer;")}>Add budget</button>}
           {me && me === c.merchant && <button className="press bs" type="button" onClick={() => setControls("key")} style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 14px Inter, sans-serif; cursor: pointer;")}>Change claim key</button>}
+          {me && me === c.merchant && (stateOverride ?? c.state ?? "active") === "active" && <button className="press bs" type="button" onClick={() => setControls("pause")} style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 14px Inter, sans-serif; cursor: pointer;")}>Pause promotions</button>}
+          {me && me === c.merchant && (stateOverride ?? c.state) === "paused" && <button className="press bs" type="button" onClick={() => setControls("resume")} style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 14px Inter, sans-serif; cursor: pointer;")}>Resume promotions</button>}
+          {me && me === c.merchant && (stateOverride ?? c.state ?? "active") !== "ended" && <button className="press bs" type="button" onClick={() => setControls("end")} style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 14px Inter, sans-serif; cursor: pointer;")}>End campaign</button>}
           {me && me === c.merchant && <Link className="press bs" to="/app/merchant" style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center;")}>Manage in merchant console</Link>}
           <a className="press bp" href="#promote" style={st("height: 40px; padding: 0 16px; border-radius: 10px; background: #0F766E; color: #FFFFFF; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 8px;")}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1" /><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" /></svg>Get referral link
@@ -300,6 +307,7 @@ export default function CampaignPage() {
         </div>
 
         {controls === "topup" && c && <TopUpDialog campaign={c} onClose={() => setControls(null)} onDone={(t) => { setControls(null); setNote(t); setTimeout(() => camp.retry(), 4000); }} />}
+        {(controls === "pause" || controls === "resume" || controls === "end") && c && <StateDialog campaign={c} action={controls} onClose={() => setControls(null)} onDone={(t, s) => { setControls(null); setNote(t); setStateOverride(s); setTimeout(() => camp.retry(), 4000); }} />}
         {controls === "key" && c && <RotateKeyDialog campaign={c} onClose={() => setControls(null)} onDone={(t) => { setControls(null); setNote(t); setTimeout(() => camp.retry(), 4000); }} />}
         {note && <p role="status" style={st("font-size: 13px; line-height: 19px; color: #0E7A2F; background: #CAFACE; border-radius: 8px; padding: 10px 12px;")}>{note}</p>}
         {listing && c && <ListingModal campaign={c.address} existing={c.listing} onClose={() => setListing(false)} onDone={() => { setListing(false); camp.retry(); }} />}

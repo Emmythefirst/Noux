@@ -3,7 +3,7 @@ import { PublicKey } from "@solana/web3.js";
 import { st } from "../lib/css";
 import { apiGet, type Campaign } from "../lib/api";
 import { fmt2, short } from "../lib/format";
-import { newTx, parseAmount, setAttributionKeyIx, topUpBudgetIx } from "../lib/program";
+import { newTx, parseAmount, setAttributionKeyIx, setCampaignStateIx, topUpBudgetIx, type CampaignStateName } from "../lib/program";
 import { getBlockhash, useWallet } from "../lib/wallet-connect";
 import { isPubkey } from "../lib/wallet";
 import { WalletButton } from "./wallet-ui";
@@ -88,6 +88,43 @@ export function RotateKeyDialog({ campaign, onClose, onDone }: { campaign: Campa
       {w.address && !mine && <NotMine addr={w.address} />}
       {err && <p role="alert" style={st("font-size: 13px; color: #B42318;")}>{err}</p>}
       <Actions w={w} mine={mine} busy={busy} ok={valid} label="Change key" onClose={onClose} onGo={() => void go()} />
+    </Shell>
+  );
+}
+
+const STATE_COPY = {
+  pause: { title: "Pause promotions", go: "Pause promotions", to: "paused" as CampaignStateName, done: "Promotions paused. No new referral sales; buyers can still buy without a referral.",
+    body: "Pausing stops NEW referral sales on this campaign right away. Buyers can still buy from you without a referral and you are paid in full. Sales that are already open settle normally and can still be refunded. You can resume whenever you like. The first pause creates a small on-chain record (under 0.002 SOL, paid by your wallet)." },
+  resume: { title: "Resume promotions", go: "Resume promotions", to: "active" as CampaignStateName, done: "Promotions resumed. New referral sales are open again.",
+    body: "Referral sales start again straight away." },
+  end: { title: "End this campaign", go: "End campaign for good", to: "ended" as CampaignStateName, done: "Campaign ended. It takes no new referral sales and can never be reopened.",
+    body: "Ending is permanent. The campaign takes no new referral sales and can never be resumed or paused again. Sales already open still settle, past receipts stay public and verifiable, and you can still raise the budget or change the claim key. If you want to promote this service again, create a new campaign." },
+};
+
+/** Pause, resume or permanently end a campaign's new referral sales. */
+export function StateDialog({ campaign, action, onClose, onDone }: { campaign: Campaign; action: keyof typeof STATE_COPY; onClose: () => void; onDone: (text: string, state: CampaignStateName) => void }) {
+  const w = useWallet(); const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null); const [typed, setTyped] = useState("");
+  const copy = STATE_COPY[action], mine = !!w.address && w.address === campaign.merchant, ok = action !== "end" || typed.trim().toUpperCase() === "END";
+  const go = async () => {
+    if (!w.address || !ok) return; setBusy(true); setErr(null);
+    try { const m = new PublicKey(w.address); await w.signAndSend(newTx(setCampaignStateIx({ merchant: m, campaign: new PublicKey(campaign.address), state: copy.to }), m, await getBlockhash())); onDone(copy.done, copy.to); }
+    catch (e) { setErr((e as Error).message); setBusy(false); }
+  };
+  return (
+    <Shell title={copy.title} busy={busy} onClose={onClose}>
+      <p style={st("font-size: 14px; line-height: 20px; color: #333333;")}>{copy.body}</p>
+      {action === "end" && (
+        <label style={st("display: flex; flex-direction: column; gap: 6px; font: 500 13px Inter, sans-serif; color: #333333;")}>Type END to confirm
+          <input value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus autoComplete="off" spellCheck={false} placeholder="END" style={st(FIELD)} />
+        </label>
+      )}
+      {!w.address && <p style={st("font-size: 12px; line-height: 18px; color: #6B6B6B;")}>This is signed by the merchant wallet. Connect it to continue.</p>}
+      {w.address && !mine && <NotMine addr={w.address} />}
+      {err && <p role="alert" style={st("font-size: 13px; color: #B42318;")}>{err}</p>}
+      <div style={st("display: flex; gap: 8px; justify-content: flex-end;")}>
+        <button className="press bs tap" type="button" disabled={busy} onClick={onClose} style={st(BTN + "border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111;")}>Cancel</button>
+        {!w.address ? <WalletButton /> : <button className="press tap" type="button" disabled={!mine || !ok || busy} onClick={() => void go()} style={{ ...st(BTN + "border: 0; color: #FFFFFF; background: " + (action === "end" ? "#D92D20;" : "#0F766E;")), opacity: !mine || !ok || busy ? 0.5 : 1 }}>{busy ? "Working…" : copy.go}</button>}
+      </div>
     </Shell>
   );
 }

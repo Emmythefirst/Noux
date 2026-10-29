@@ -35,6 +35,7 @@
 | `refund_sale` | merchant only, while Open | Whole vault back to the claim's buyer; no commission or fee. `Sale` becomes a Refunded receipt. |
 | `top_up_budget` | merchant | Raises the commission budget (the cap) by an amount; increase-only, zero and overflow refused. No funds move. |
 | `set_attribution_key` | merchant | Changes the key the campaign trusts to sign claims, effective at once (`open_sale` checks the stored key). The all-zero key is refused. Sales already open are unaffected. |
+| `set_campaign_state` | merchant | Pause, resume or permanently end new referral sales. Writes the campaign's control account (PDA `["control", campaign]`, created on first use, rent paid by the merchant). `open_sale` takes that account and refuses unless the campaign is active (no account = active). Active and Paused swap; anything can become Ended; Ended is final. Sales already open are unaffected. |
 | `close_expired_sale` | anyone | Reclaims rent of a sale nobody paid, only after the claim expired and the vault is empty. |
 
 **Claim message** (197 bytes): `NOUX-CLAIM-v1 | program id | cluster tag (8) | campaign | distributor | buyer | expiry | price | nonce`. Binding the program id and cluster stops cross-program and cross-cluster replay; binding the buyer makes a claim useless to anyone else.

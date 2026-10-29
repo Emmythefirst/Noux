@@ -26,6 +26,11 @@ export const DevnetBadge = () => (
   <span className="mono" style={st("font-size: 11px; letter-spacing: 0.08em; color: #8A4B00; background: #FFF1D6; padding: 3px 8px; border-radius: 6px;")}>DEVNET</span>
 );
 
+/** Paused / Ended marker; nothing for an active campaign. */
+export const StateBadge = ({ state, style }: { state?: "active" | "paused" | "ended"; style?: CSSProperties }) => state === "paused" || state === "ended" ? (
+  <span style={{ ...st(state === "paused" ? "height: 20px; padding: 0 8px; border-radius: 6px; background: #FFF1D6; color: #8A4B00; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center;" : "height: 20px; padding: 0 8px; border-radius: 6px; background: #F4F4F5; color: #333333; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center;"), ...style }}>{state === "paused" ? "Paused" : "Ended"}</span>
+) : null;
+
 export const SampleBadge = ({ style }: { style?: CSSProperties }) => (
   <span style={{ ...st("height: 20px; padding: 0 8px; border-radius: 6px; background: #F4F4F5; color: #333333; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center;"), ...style }}>Sample</span>
 );

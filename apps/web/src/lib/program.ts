@@ -15,7 +15,9 @@ export const DISC = {
   refundSale: Uint8Array.from([65, 216, 1, 125, 151, 16, 225, 13]),
   topUpBudget: Uint8Array.from([109, 177, 243, 124, 217, 10, 113, 207]),
   setAttributionKey: Uint8Array.from([145, 210, 243, 236, 5, 52, 21, 16]),
+  setCampaignState: Uint8Array.from([150, 189, 135, 56, 200, 92, 225, 198]),
 };
+export const controlPda = (campaign: PublicKey, programId = PROGRAM_ID) => PublicKey.findProgramAddressSync([new TextEncoder().encode("control"), campaign.toBytes()], programId)[0];
 
 export const MAX_COMMISSION_BPS = 5000, MAX_HOLD_SECS = 600;
 export const configPda = (programId = PROGRAM_ID) => PublicKey.findProgramAddressSync([new TextEncoder().encode("config")], programId)[0];
@@ -94,6 +96,20 @@ export function setAttributionKeyIx(a: SetKeyArgs): TransactionInstruction {
   if (a.newKey.equals(PublicKey.default)) throw new Error("The key must not be the all-zero key.");
   const data = Buffer.alloc(40); Buffer.from(DISC.setAttributionKey).copy(data, 0); Buffer.from(a.newKey.toBytes()).copy(data, 8);
   return new TransactionInstruction({ programId: PROGRAM_ID, data, keys: [{ pubkey: a.merchant, isSigner: true, isWritable: false }, { pubkey: a.campaign, isSigner: false, isWritable: true }] });
+}
+
+/** Merchant only: pause, resume or permanently end a campaign's NEW referral sales. The enum is one byte: 0 Active, 1 Paused, 2 Ended. */
+export type CampaignStateName = "active" | "paused" | "ended";
+const STATE_BYTE: Record<CampaignStateName, number> = { active: 0, paused: 1, ended: 2 };
+export interface SetStateArgs { merchant: PublicKey; campaign: PublicKey; state: CampaignStateName }
+export function setCampaignStateIx(a: SetStateArgs): TransactionInstruction {
+  const data = Buffer.alloc(9); Buffer.from(DISC.setCampaignState).copy(data, 0); data[8] = STATE_BYTE[a.state];
+  return new TransactionInstruction({ programId: PROGRAM_ID, data, keys: [
+    { pubkey: a.merchant, isSigner: true, isWritable: true },      // pays the control account's rent the first time
+    { pubkey: a.campaign, isSigner: false, isWritable: false },
+    { pubkey: controlPda(a.campaign), isSigner: false, isWritable: true },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+  ] });
 }
 
 export interface Blockhash { blockhash: string; lastValidBlockHeight: number }

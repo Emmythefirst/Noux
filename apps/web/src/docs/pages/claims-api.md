@@ -33,6 +33,7 @@ Send it in the `x-noux-claim` header as base64 of this JSON.
 | 400 | `bad_request` | Malformed body, key, price or timestamp. |
 | 400 | `bad_price` | Price is zero or above the maximum. |
 | 400 | `self_referral` | `distributor` equals `buyer`. |
+| 409 | `campaign_not_active` | The campaign is paused or ended and takes no new referral sales. |
 | 401 | `bad_buyer_signature` | Not signed by the buyer, altered after signing, or older than 60 seconds. |
 | 404 | `campaign_not_found` | No such campaign, a different cluster, or it trusts a different attribution key. |
 | 429 | `rate_limited` | Too many claims for this distributor, buyer, campaign or IP in the last minute. `Retry-After` is set. |
