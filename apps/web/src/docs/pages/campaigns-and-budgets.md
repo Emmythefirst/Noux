@@ -16,7 +16,13 @@ Terms are written on-chain when the campaign is created. There is no edit instru
 
 The commission budget limits how much commission the campaign can ever pay. Nothing is locked: each sale pays its commission out of that sale's own payment. When the cap is reached, buyers still pay, you keep the rest of every sale, and you simply stop paying commission. If a sale is only partly covered by what is left, the receipt says "budget cap reduced commission".
 
-There is no top-up and no pause or close instruction yet. The merchant console's **Budget** page shows, per campaign, the cap, what has been paid out, what is left and an estimate of how many more sales it covers.
+**Adding budget.** The merchant can raise the cap at any time (**Add budget** on the Budget page or the campaign page). It can only go up: lowering a cap would shrink the commission of sales already in flight, so there is deliberately no way to do it. Adding budget moves no funds. A campaign that ran out of budget starts paying commission again as soon as it is topped up.
+
+There is no pause or close instruction yet. The merchant console's **Budget** page shows, per campaign, the cap, what has been paid out, what is left and an estimate of how many more sales it covers.
+
+## The claim key
+
+Every referral claim for a campaign is signed by one key, and the program only accepts claims signed by the key stored on the campaign. A merchant can change that key at any time (**Change claim key** on the campaign page), for example if the key may have leaked or to move to a new Noux claim key. It takes effect immediately: claims signed by the old key stop working (buyers simply request a new one), and sales that were already open settle normally. Only the merchant wallet can change it. Choose a key whose owner you trust: if nobody holds the private key, no referral claim can be issued for the campaign, although buyers can still buy without a referral.
 
 ## Listing
 

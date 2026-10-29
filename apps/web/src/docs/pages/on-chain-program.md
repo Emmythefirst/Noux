@@ -10,6 +10,10 @@ All three are Anchor accounts owned by the program.
 
 A **Sale** doubles as the public receipt: after settlement it keeps the final amounts, and `status` is `Open`, `Settled` or `Refunded`. `gross` stays 0 until settlement or refund; while a sale is open the amount paid is the balance of its vault.
 
+## Instructions
+
+`init_config`, `update_config`, `create_campaign`, `open_sale`, `settle_sale`, `refund_sale`, `close_expired_sale`, and two merchant-only campaign controls: `top_up_budget` (raise the commission cap; never lower it) and `set_attribution_key` (change the key the campaign trusts to sign claims; effective at once). Full table in the repository's architecture document.
+
 ## Limits
 
 | Constant | Value |
@@ -21,7 +25,7 @@ A **Sale** doubles as the public receipt: after settlement it keeps the final am
 
 ## Errors
 
-`BpsTooHigh`, `ClaimExpired`, `SelfReferral`, `ZeroPrice`, `BadSignatureIx`, `WrongSigner`, `ClaimMismatch`, `AlreadySettled`, `Underpaid`, `NotExpired`, `VaultNotEmpty`, `HoldActive`, `HoldTooLong`, `NothingToRefund`, `Math`, `NotUpgradeAuthority`, `NotAdmin`.
+`BpsTooHigh`, `ClaimExpired`, `SelfReferral`, `ZeroPrice`, `BadSignatureIx`, `WrongSigner`, `ClaimMismatch`, `AlreadySettled`, `Underpaid`, `NotExpired`, `VaultNotEmpty`, `HoldActive`, `HoldTooLong`, `NothingToRefund`, `Math`, `NotUpgradeAuthority`, `NotAdmin`, `NotMerchant`, `BadBudgetIncrease`, `InvalidKey`.
 
 ## Deployments
 

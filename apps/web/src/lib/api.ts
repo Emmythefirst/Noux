@@ -11,6 +11,7 @@ export interface Listing {
 export interface Campaign {
   address: string; merchant: string; mint: string; decimals: number; cluster: string;
   commissionBps: number; feeBps: number; holdSecs: number;
+  attributionKey?: string;
   feeOwner: string; feeEnforced: boolean | null;
   budget: { total: string; spent: string; remaining: string };
   status: "active" | "budget_exhausted";

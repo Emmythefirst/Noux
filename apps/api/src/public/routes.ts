@@ -48,6 +48,7 @@ export function publicRoutes(d: PublicDeps) {
     return {
       address: r.address, merchant: r.merchant, mint: r.mint, decimals: d.decimals, cluster: r.cluster,
       commissionBps: r.commission_bps, feeBps: r.fee_bps, holdSecs: r.hold_secs,
+      attributionKey: r.attribution_key, // the key this campaign trusts to sign claims (merchants can rotate it)
       // true: the fee wallet is the protocol's (set by the program's config). false: a legacy campaign created before enforcement. null: unknown.
       feeOwner: r.fee_owner, feeEnforced: cfg ? r.fee_owner === cfg.feeOwner.toBase58() : null,
       budget: { total: total.toString(), spent: spent.toString(), remaining: remaining.toString() },

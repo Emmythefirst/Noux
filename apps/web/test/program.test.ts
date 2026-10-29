@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import { BorshInstructionCoder } from "@anchor-lang/core";
 import { Keypair, PublicKey } from "@solana/web3.js";
-import { DISC, USDC_MINT, ata, campaignPda, canonicalListing, configPda, createCampaignIx, listingMessage, parseAmount, refundSaleIx, PROGRAM_ID } from "../src/lib/program";
+import { DISC, USDC_MINT, ata, campaignPda, canonicalListing, configPda, createCampaignIx, listingMessage, parseAmount, refundSaleIx, setAttributionKeyIx, topUpBudgetIx, PROGRAM_ID } from "../src/lib/program";
 
 const idl = JSON.parse(fs.readFileSync(new URL("../../../packages/core/idl/noux.json", import.meta.url), "utf8"));
 const coder = new BorshInstructionCoder(idl);
@@ -10,7 +10,7 @@ const k = () => Keypair.generate().publicKey;
 
 describe("instruction builders agree with the generated IDL", () => {
   it("discriminators are the IDL's", () => {
-    for (const [name, key] of [["create_campaign", "createCampaign"], ["refund_sale", "refundSale"]] as const)
+    for (const [name, key] of [["create_campaign", "createCampaign"], ["refund_sale", "refundSale"], ["top_up_budget", "topUpBudget"], ["set_attribution_key", "setAttributionKey"]] as const)
       expect(Array.from(DISC[key])).toEqual(idl.instructions.find((i: any) => i.name === name).discriminator);
   });
   it("create_campaign data is byte-identical to Anchor's encoding, and accounts follow the IDL order", () => {
@@ -56,5 +56,26 @@ describe("listing message matches the server's canonical form", () => {
     const core = await import("../../../packages/core/src/listing");
     const want = core.listingMessage({ campaign: new PublicKey(campaign), listing: l as any, ts: 1_800_000_000 });
     expect(Buffer.from(await listingMessage(campaign, l, 1_800_000_000)).toString("hex")).toBe(want.toString("hex"));
+  });
+});
+
+describe("top_up_budget and set_attribution_key builders", () => {
+  const BN = require("bn.js");
+  it("top_up_budget data is byte-identical to Anchor's encoding; accounts follow the IDL (merchant signs, campaign writable)", () => {
+    const [m, c] = [k(), k()]; const ix = topUpBudgetIx({ merchant: m, campaign: c, amount: 12_345_678_901n });
+    expect(Buffer.from(ix.data).toString("hex")).toBe(coder.encode("top_up_budget", { amount: new BN("12345678901") }).toString("hex"));
+    expect(idl.instructions.find((i: any) => i.name === "top_up_budget").accounts.map((x: any) => x.name)).toEqual(["merchant", "campaign"]);
+    expect(ix.keys.map((x) => [x.pubkey.toBase58(), x.isSigner, x.isWritable])).toEqual([[m.toBase58(), true, false], [c.toBase58(), false, true]]);
+  });
+  it("top_up_budget refuses zero and anything that does not fit a u64, before a wallet is involved", () => {
+    expect(() => topUpBudgetIx({ merchant: k(), campaign: k(), amount: 0n })).toThrow(/greater than zero/);
+    expect(() => topUpBudgetIx({ merchant: k(), campaign: k(), amount: 1n << 64n })).toThrow();
+    expect(topUpBudgetIx({ merchant: k(), campaign: k(), amount: (1n << 64n) - 1n }).data.length).toBe(16);
+  });
+  it("set_attribution_key data is byte-identical to Anchor's encoding; the all-zero key is refused client-side", () => {
+    const [m, c, key] = [k(), k(), k()]; const ix = setAttributionKeyIx({ merchant: m, campaign: c, newKey: key });
+    expect(Buffer.from(ix.data).toString("hex")).toBe(coder.encode("set_attribution_key", { new_key: key }).toString("hex"));
+    expect(idl.instructions.find((i: any) => i.name === "set_attribution_key").accounts.map((x: any) => x.name)).toEqual(["merchant", "campaign"]);
+    expect(() => setAttributionKeyIx({ merchant: m, campaign: c, newKey: PublicKey.default })).toThrow(/all-zero/);
   });
 });

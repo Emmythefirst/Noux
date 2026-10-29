@@ -13,6 +13,8 @@ const ATA_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
 export const DISC = {
   createCampaign: Uint8Array.from([111, 131, 187, 98, 160, 193, 114, 244]),
   refundSale: Uint8Array.from([65, 216, 1, 125, 151, 16, 225, 13]),
+  topUpBudget: Uint8Array.from([109, 177, 243, 124, 217, 10, 113, 207]),
+  setAttributionKey: Uint8Array.from([145, 210, 243, 236, 5, 52, 21, 16]),
 };
 
 export const MAX_COMMISSION_BPS = 5000, MAX_HOLD_SECS = 600;
@@ -76,6 +78,22 @@ export function refundSaleIx(a: RefundArgs): TransactionInstruction {
       { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
     ],
   });
+}
+
+/** Merchant only: raise the commission budget (the cap) by `amount` base units. Increase-only; nothing is locked or moved. */
+export interface TopUpArgs { merchant: PublicKey; campaign: PublicKey; amount: bigint }
+export function topUpBudgetIx(a: TopUpArgs): TransactionInstruction {
+  if (a.amount <= 0n || a.amount >= 1n << 64n) throw new Error("The amount must be greater than zero.");
+  const data = Buffer.alloc(16); Buffer.from(DISC.topUpBudget).copy(data, 0); data.writeBigUInt64LE(a.amount, 8);
+  return new TransactionInstruction({ programId: PROGRAM_ID, data, keys: [{ pubkey: a.merchant, isSigner: true, isWritable: false }, { pubkey: a.campaign, isSigner: false, isWritable: true }] });
+}
+
+/** Merchant only: change which key the campaign trusts to sign claims. Takes effect at once. */
+export interface SetKeyArgs { merchant: PublicKey; campaign: PublicKey; newKey: PublicKey }
+export function setAttributionKeyIx(a: SetKeyArgs): TransactionInstruction {
+  if (a.newKey.equals(PublicKey.default)) throw new Error("The key must not be the all-zero key.");
+  const data = Buffer.alloc(40); Buffer.from(DISC.setAttributionKey).copy(data, 0); Buffer.from(a.newKey.toBytes()).copy(data, 8);
+  return new TransactionInstruction({ programId: PROGRAM_ID, data, keys: [{ pubkey: a.merchant, isSigner: true, isWritable: false }, { pubkey: a.campaign, isSigner: false, isWritable: true }] });
 }
 
 export interface Blockhash { blockhash: string; lastValidBlockHeight: number }

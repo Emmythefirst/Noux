@@ -33,6 +33,8 @@
 | `open_sale` | gateway (anyone can submit) | Requires the previous instruction to be an ed25519 verify of the claim by the campaign's attribution key. Creates `Sale` (PDA of campaign + nonce) and its vault. Freezes commission/fee bps. |
 | `settle_sale` | merchant any time; others after `hold_until` | Splits the vault. Closes the vault. `Sale` stays as the receipt. |
 | `refund_sale` | merchant only, while Open | Whole vault back to the claim's buyer; no commission or fee. `Sale` becomes a Refunded receipt. |
+| `top_up_budget` | merchant | Raises the commission budget (the cap) by an amount; increase-only, zero and overflow refused. No funds move. |
+| `set_attribution_key` | merchant | Changes the key the campaign trusts to sign claims, effective at once (`open_sale` checks the stored key). The all-zero key is refused. Sales already open are unaffected. |
 | `close_expired_sale` | anyone | Reclaims rent of a sale nobody paid, only after the claim expired and the vault is empty. |
 
 **Claim message** (197 bytes): `NOUX-CLAIM-v1 | program id | cluster tag (8) | campaign | distributor | buyer | expiry | price | nonce`. Binding the program id and cluster stops cross-program and cross-cluster replay; binding the buyer makes a claim useless to anyone else.

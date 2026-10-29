@@ -380,3 +380,10 @@ describe("migrations under concurrency", () => {
     try { await Promise.all([migrate(pool), migrate(other), migrate(pool), migrate(other)]); } finally { await other.end(); }
   });
 });
+
+describe("campaign card carries the attribution key (so a merchant can see what the campaign trusts)", () => {
+  beforeEach(async () => { await syncOnce(pool, chain); });
+  it("GET /v1/campaigns/:address includes attributionKey", async () => {
+    const r = await get(mkApp(), `/v1/campaigns/${A}`); expect(r.status).toBe(200); expect(r.body.attributionKey).toBe(attest);
+  });
+});

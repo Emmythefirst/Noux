@@ -7,6 +7,7 @@ import { isPubkey, useWalletAddress } from "../lib/wallet";
 import { referralLink } from "../lib/buy";
 import { useWallet } from "../lib/wallet-connect";
 import { ListingModal } from "../components/listing-modal";
+import { RotateKeyDialog, TopUpDialog } from "../components/campaign-controls";
 import { Addr, isUnderpaid, openText, Disclosure, Dot, ErrorState, Page, SaleBadge, SampleBadge, TopNav, WakingBanner } from "../components/common";
 
 const H2 = "font-size: 16px; line-height: 20px; letter-spacing: -0.01em; font-weight: 500; color: #111111;";
@@ -99,6 +100,8 @@ export default function CampaignPage() {
   const now = useNow(1000);
   const me = useWallet().address;
   const [listing, setListing] = useState(false);
+  const [controls, setControls] = useState<null | "topup" | "key">(null);
+  const [note, setNote] = useState<string | null>(null);
   const c = camp.data;
   const chart = useMemo(() => dailyCounts(sales.data?.items ?? [], Date.now()), [sales.data]);
 
@@ -158,6 +161,8 @@ export default function CampaignPage() {
           </div>
           <div style={st("display: flex; gap: 8px; flex-wrap: wrap;")}>
           {me && me === c.merchant && <button className="press bs" type="button" onClick={() => setListing(true)} style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 14px Inter, sans-serif; cursor: pointer;")}>{c.listing ? "Edit listing" : "List this campaign"}</button>}
+          {me && me === c.merchant && <button className="press bs" type="button" onClick={() => setControls("topup")} style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 14px Inter, sans-serif; cursor: pointer;")}>Add budget</button>}
+          {me && me === c.merchant && <button className="press bs" type="button" onClick={() => setControls("key")} style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 14px Inter, sans-serif; cursor: pointer;")}>Change claim key</button>}
           {me && me === c.merchant && <Link className="press bs" to="/app/merchant" style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center;")}>Manage in merchant console</Link>}
           <a className="press bp" href="#promote" style={st("height: 40px; padding: 0 16px; border-radius: 10px; background: #0F766E; color: #FFFFFF; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 8px;")}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1" /><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" /></svg>Get referral link
@@ -294,6 +299,9 @@ export default function CampaignPage() {
           </aside>
         </div>
 
+        {controls === "topup" && c && <TopUpDialog campaign={c} onClose={() => setControls(null)} onDone={(t) => { setControls(null); setNote(t); setTimeout(() => camp.retry(), 4000); }} />}
+        {controls === "key" && c && <RotateKeyDialog campaign={c} onClose={() => setControls(null)} onDone={(t) => { setControls(null); setNote(t); setTimeout(() => camp.retry(), 4000); }} />}
+        {note && <p role="status" style={st("font-size: 13px; line-height: 19px; color: #0E7A2F; background: #CAFACE; border-radius: 8px; padding: 10px 12px;")}>{note}</p>}
         {listing && c && <ListingModal campaign={c.address} existing={c.listing} onClose={() => setListing(false)} onDone={() => { setListing(false); camp.retry(); }} />}
         <Disclosure text={c.disclosure} style={{ borderTop: "1px solid #EBEBEB", paddingTop: 24 }} />
       </main>

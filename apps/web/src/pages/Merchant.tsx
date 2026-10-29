@@ -8,6 +8,7 @@ import { campaignPda, createCampaignIx, listingMessage, newTx, parseAmount, refu
 import { getBlockhash, useWallet } from "../lib/wallet-connect";
 import { RPC_URL } from "../lib/verify";
 import { WalletButton } from "../components/wallet-ui";
+import { TopUpDialog } from "../components/campaign-controls";
 import { publishListing } from "../lib/publish-listing";
 import { NavMenu } from "../components/navdrawer";
 import { ThemeToggle } from "../lib/theme";
@@ -243,6 +244,7 @@ export default function Merchant() {
   const [salesLimit, setSalesLimit] = useState(25);
   const [creating, setCreating] = useState(false);
   const [confirm, setConfirm] = useState<Receipt | null>(null);
+  const [topUp, setTopUp] = useState<Campaign | null>(null);
   const fresh = useIndexFreshness();
   const now = useNow(1000);
 
@@ -421,7 +423,7 @@ export default function Merchant() {
 
     const budgetView = (
       <>
-        {tableWrap(860, <>{th("Campaign")}{th("Cap", true)}{th("Paid out", true)}{th("Left", true)}{th("Used")}{th("Avg commission / sale", true)}{th("Sales it can still cover (estimate)", true)}</>,
+        {tableWrap(940, <>{th("Campaign")}{th("Cap", true)}{th("Paid out", true)}{th("Left", true)}{th("Used")}{th("Avg commission / sale", true)}{th("Sales it can still cover (estimate)", true)}{th("Action")}</>,
           mine.map((c) => {
             const tot = BigInt(c.budget.total), spent = BigInt(c.budget.spent), left = BigInt(c.budget.remaining);
             const usedPct = tot > 0n ? Number((spent * 1000n) / tot) / 10 : 0;
@@ -433,10 +435,11 @@ export default function Merchant() {
                 <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB;")}><div style={st("display: flex; align-items: center; gap: 10px;")}><div aria-hidden="true" style={st("width: 80px; height: 4px; background: #F4F4F5; border-radius: 9999px; overflow: hidden;")}><div style={{ width: `${usedPct}%`, height: "100%", background: usedPct > 85 ? "#8A4B00" : "#111111" }} /></div><span className="tn" style={st("font-size: 13px; color: #333333;")}>{usedPct.toFixed(1)}%</span></div></td>
                 {td(avg > 0n ? fmtAmount(avg) : "—", { right: true })}
                 {td(avg > 0n ? Math.floor(Number(left) / Number(avg)).toLocaleString("en-US") : "—", { right: true })}
+                <td style={st("padding: 0 12px; border-bottom: 1px solid #EBEBEB; white-space: nowrap;")}>{w.address === c.merchant ? <button className="press bs tap" type="button" onClick={() => setTopUp(c)} style={st("height: 28px; padding: 0 10px; border: 1px solid #D4D4D8; background: #FFFFFF; border-radius: 8px; font: 500 12px Inter, sans-serif; color: #111111; cursor: pointer;")}>Add budget</button> : <span style={st("font-size: 12px; color: #6B6B6B;")}>—</span>}</td>
               </tr>
             );
           }))}
-        {note("The commission budget is a cap on what you can pay distributors in commission, not money held by Noux. When it runs out, buyers still pay and you keep the rest; you just stop paying commission. There is no top-up yet: the cap is set when the campaign is created. The estimate divides what is left by the average commission paid so far.")}
+        {note("The commission budget is a cap on what you can pay distributors in commission, not money held by Noux. When it runs out, buyers still pay and you keep the rest; you just stop paying commission. You can raise the cap at any time with Add budget (it can only go up, and no funds move). The estimate divides what is left by the average commission paid so far.")}
       </>
     );
 
@@ -561,6 +564,7 @@ export default function Merchant() {
         <main style={st("padding: 28px clamp(16px, 3vw, 32px) 64px; display: flex; flex-direction: column; gap: 28px; max-width: 1240px; width: 100%;")}>{body}</main>
       </div>
       {creating && <CreateSheet onClose={() => setCreating(false)} onCreated={(c) => { setCreating(false); list.retry(); setToast({ text: "Campaign created and listed. The directory updates within a minute.", to: `/campaigns/${c}` }); }} />}
+      {topUp && <TopUpDialog campaign={topUp} onClose={() => setTopUp(null)} onDone={(text) => { setTopUp(null); setToast({ text }); }} />}
       {confirm && <RefundDialog sale={confirm} merchant={mine.find((c) => c.address === confirm.campaign)?.merchant ?? null} onClose={() => setConfirm(null)} onDone={(r) => { setConfirm(null); list.retry(); sales.markRefunded(r.sale); setToast({ text: `Sale refunded. The buyer has ${fmtAmount(r.vaultAmount !== "0" ? r.vaultAmount : r.gross, r.decimals)} USDC back.`, to: `/r/${r.sale}` }); }} />}
       {toast && (
         <div className="toast" role="status" style={st("position: fixed; z-index: 70; right: 24px; bottom: 24px; max-width: calc(100% - 48px); background: #111111; color: #FFFFFF; border-radius: 12px; padding: 12px 16px; font-size: 14px; display: flex; align-items: center; gap: 12px; box-shadow: 0 12px 24px -8px rgb(0 0 0 / .3);")}>

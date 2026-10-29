@@ -29,5 +29,5 @@ are not endorsements, and `sample` services are demonstrations whose volume is n
 
 ## Protocol fee
 The fee % and fee wallet are not chosen by merchants: `create_campaign` copies them from a global on-chain config (max 5%, changeable only by the config admin,
-and only for campaigns created afterwards). Campaign cards carry `feeOwner` and `feeEnforced` (`true`: the program's fee wallet; `false`: a legacy campaign created
+and only for campaigns created afterwards). Campaign cards carry `attributionKey` (the key the campaign trusts to sign claims), `feeOwner` and `feeEnforced` (`true`: the program's fee wallet; `false`: a legacy campaign created
 before enforcement; `null`: the config could not be read, so nothing is claimed). Receipts carry `parties.feeOwner`.
