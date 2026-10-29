@@ -32,15 +32,19 @@ const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 /** Network-level / server-side trouble where the facilitator's answer is unknown. A definitive refusal is NOT this. */
 export function isAmbiguous(e: unknown): boolean {
   const m = String((e as any)?.message ?? e) + " " + String((e as any)?.cause?.code ?? "") + " " + String((e as any)?.cause?.message ?? "");
-  return /fetch failed|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|UND_ERR|socket hang up|timed? ?out|aborted|\b(500|502|503|504|429)\b|Too Many Requests/i.test(m);
+  return /fetch failed|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|UND_ERR|socket hang up|timed? ?out|aborted|\b(500|502|503|504|429)\b|Too Many Requests/i.test(m) || PENDING.test(m);
 }
+
+/** The facilitator submitted the payment but did not see it confirm before ITS deadline ("settlement_pending ... did not confirm in time ... context deadline exceeded"). The payment may still land: not a refusal. */
+const PENDING = /settlement_pending|did not confirm in time|context deadline exceeded/i;
+const isPendingResponse = (r: unknown) => !!r && (r as any).success === false && PENDING.test(`${(r as any).errorReason ?? ""} ${(r as any).errorMessage ?? ""}`);
 
 /**
  * Wraps any x402 FacilitatorClient with retry rules that are safe for money:
  *  - verify / getSupported: pure reads at the facilitator => retried with backoff on ambiguous failures.
  *  - settle: submits a transaction that already carries the buyer's signature. We NEVER re-sign or rebuild it;
  *    the very same payload is resubmitted, and only after the chain confirms it has NOT already landed.
- *    (A timed-out settle may have succeeded.) A definitive `success:false` from the facilitator is never retried.
+ *    (A timed-out settle may have succeeded.) A definitive `success:false` from the facilitator is never retried; a "pending / did not confirm in time" answer is NOT definitive and gets the chain check.
  */
 export class ResilientFacilitator implements FacilitatorClient {
   private o: Required<Omit<ResilientOptions, "confirmLanded" | "onEvent">> & Pick<ResilientOptions, "confirmLanded" | "onEvent">;
@@ -71,7 +75,9 @@ export class ResilientFacilitator implements FacilitatorClient {
     let lastErr: unknown;
     for (let attempt = 1; attempt <= this.o.maxSettleAttempts; attempt++) {
       try {
-        return await this.inner.settle(payload, requirements); // definitive success/failure responses return here untouched
+        const res = await this.inner.settle(payload, requirements);
+        if (!isPendingResponse(res)) return res; // definitive success/failure responses return here untouched
+        throw new Error(`${(res as any).errorReason ?? "settlement_pending"}: ${(res as any).errorMessage ?? "did not confirm in time"}`); // ambiguous: look at the chain before deciding
       } catch (e) {
         lastErr = e;
         if (!isAmbiguous(e)) throw e; // e.g. the facilitator rejected it: not our call to retry

@@ -99,3 +99,38 @@ describe("settle: never blind-retry, never re-sign", () => {
     expect(calls.filter((c) => c[0] === "settle").length).toBe(3);
   });
 });
+
+describe("settle: 'did not confirm in time' is AMBIGUOUS (the payment may still land), not a definitive refusal", () => {
+  const PENDING = { errorReason: "settlement_pending", errorMessage: "transaction did not confirm in time: context deadline exceeded" };
+  /** facilitator whose settle answers `pending` first (as a returned failure or a thrown error), then `ok` */
+  function pendingThenOk(kind: "returned" | "thrown", calls: any[]) {
+    let n = 0;
+    return { calls, verify: async () => ({ isValid: true }), getSupported: async () => ({ kinds: [], extensions: [], signers: {} }),
+      settle: async (p: any) => { calls.push(["settle", p]); if (n++ === 0) { if (kind === "thrown") throw new Error(`${PENDING.errorReason}: ${PENDING.errorMessage}`); return { success: false, ...PENDING, transaction: "", network: "n" }; } return { success: true, transaction: "RESUBMITTED", payer: "BUYER", network: "n" }; } } as any;
+  }
+  for (const kind of ["returned", "thrown"] as const) {
+    it(`(${kind}) if it landed in the meantime: success from the chain, and NOTHING is resubmitted`, async () => {
+      const calls: any[] = []; const events: any[] = [];
+      const f = mk(pendingThenOk(kind, calls), () => ({ landed: true, transaction: "CHAINSIG", payer: "BUYER" }), events);
+      expect(await f.settle(payload, reqs)).toMatchObject({ success: true, transaction: "CHAINSIG" });
+      expect(calls.filter((c) => c[0] === "settle").length).toBe(1); expect(events.some((e) => e.type === "settle_already_landed")).toBe(true);
+    });
+    it(`(${kind}) if the chain confirms it is NOT there, the IDENTICAL payload is resubmitted once and the buyer is served`, async () => {
+      const calls: any[] = []; const f = mk(pendingThenOk(kind, calls), () => ({ landed: false }));
+      const r = await f.settle(payload, reqs);
+      expect(r).toMatchObject({ success: true, transaction: "RESUBMITTED" });
+      const settles = calls.filter((c) => c[0] === "settle"); expect(settles.length).toBe(2); expect(settles[1][1]).toBe(settles[0][1]); // same object: never re-signed
+    });
+    it(`(${kind}) if the chain cannot be read, it does not guess: the error surfaces and nothing is resubmitted`, async () => {
+      const calls: any[] = []; const f = mk(pendingThenOk(kind, calls), () => ({ landed: "unknown" }));
+      await expect(f.settle(payload, reqs)).rejects.toThrow(/unknown|not retrying/i); expect(calls.filter((c) => c[0] === "settle").length).toBe(1);
+    });
+  }
+  it("a genuine refusal (insufficient_funds) is still definitive: returned untouched, no chain check, no retry", async () => {
+    const calls: any[] = []; let checks = 0; const f = mk(inner(["badstatus"], calls), () => { checks++; return { landed: false }; });
+    expect((await f.settle(payload, reqs)).success).toBe(false); expect(calls.length).toBe(1); expect(checks).toBe(0);
+  });
+  it("isAmbiguous knows the facilitator's wording", () => {
+    for (const m of ["settlement_pending: transaction did not confirm in time: context deadline exceeded", "transaction did not confirm in time", "context deadline exceeded"]) expect(isAmbiguous(new Error(m))).toBe(true);
+  });
+});

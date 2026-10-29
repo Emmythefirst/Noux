@@ -116,9 +116,10 @@ clearInterval(mon); clearInterval(lagTimer); sample();
 // ================= invariants =================
 const all = await mySales(); const settled = all.filter((a) => "settled" in a.account.status), open = all.filter((a) => "open" in a.account.status);
 const exact = settled.every((a) => { const s = a.account, g = BigInt(s.gross.toString()), m = BigInt(s.merchantAmount.toString()), c = BigInt(s.commissionAmount.toString()), f = BigInt(s.feeAmount.toString()); return m + c + f === g && f === g * BigInt(FEE_BPS) / 10000n && c === g * BigInt(COMMISSION_BPS) / 10000n; });
-let doublePaid = 0, servedUnpaid = 0; const byKey = new Map(buyers.map((b) => [b.publicKey.toBase58(), b])); const allRes = [...p1, ...p2].map((r) => ({ r, b: byKey.get(r.who)! }));
-for (const { r, b } of allRes) { const spent = PRICE - (await bal(b.publicKey)); if (spent > PRICE) doublePaid++; if (r.status === 200 && spent !== PRICE) servedUnpaid++; }
+let doublePaid = 0, servedUnpaid = 0, chargedNotServed = 0; const byKey = new Map(buyers.map((b) => [b.publicKey.toBase58(), b])); const allRes = [...p1, ...p2].map((r) => ({ r, b: byKey.get(r.who)! }));
+for (const { r, b } of allRes) { const spent = PRICE - (await bal(b.publicKey)); if (spent > PRICE) doublePaid++; if (r.status === 200 && spent !== PRICE) servedUnpaid++; if (r.status !== 200 && spent !== 0n) chargedNotServed++; }
 rec("no buyer paid twice", doublePaid === 0, `${doublePaid}`); rec("every 200 corresponds to exactly one payment", servedUnpaid === 0, `${servedUnpaid}`);
+rec("no refused buyer was charged (charged but not served is the worst failure)", chargedNotServed === 0, `${chargedNotServed}`);
 rec("every settled sale splits exactly (fee, commission, parts sum)", exact, `${settled.length} settled`);
 rec("no sale left holding a payment unsettled", st.funded === 0, `open ${open.length}, funded ${st.funded}`);
 rec("phase 1 served every buyer", ok1.length === P, `${ok1.length}/${P}`); rec("phase 2 served every buyer", ok2.length === B, `${ok2.length}/${B}`);
