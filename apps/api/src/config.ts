@@ -30,8 +30,8 @@ const schema = z.object({
   MINT_DECIMALS: z.coerce.number().int().min(0).max(18).default(6),
   /** Set to "1" only behind a proxy you control (Railway/Vercel): trusts X-Forwarded-For for the client IP. */
   TRUST_PROXY: z.enum(["0", "1"]).default("0"),
-  /** How many trusted proxies sit in front of this service (Render: 1). The client address is the hops-th X-Forwarded-For entry from the RIGHT; entries to the left are client-controlled and ignored. Check with GET /v1/whoami. */
-  TRUSTED_PROXY_HOPS: z.coerce.number().int().min(1).max(5).default(1),
+  /** How many trusted proxy entries sit in front of this service. On Render it is 3 (observed 2026-10-29 with GET /v1/whoami: client, Cloudflare edge, Render's internal proxy). The client address is the hops-th X-Forwarded-For entry from the RIGHT; entries to the left are client-controlled and ignored. Check with GET /v1/whoami. */
+  TRUSTED_PROXY_HOPS: z.coerce.number().int().min(1).max(5).default(3),
 });
 export type Config = z.infer<typeof schema>;
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
