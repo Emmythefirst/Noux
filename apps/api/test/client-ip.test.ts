@@ -33,7 +33,7 @@ describe("the per-IP read limit cannot be walked around by forging X-Forwarded-F
   const kp = () => Keypair.generate().publicKey.toBase58();
   const mk = (hops = 1) => createApp({ cfg: { CLUSTER: "devnet", PROGRAM_ID: kp(), CLAIM_TTL_SECS: 600, MAX_PRICE_BASE_UNITS: 1n, LIMIT_PER_DISTRIBUTOR_PER_MIN: 1, LIMIT_PER_BUYER_PER_MIN: 1, LIMIT_PER_CAMPAIGN_PER_MIN: 1, LIMIT_PER_IP_PER_MIN: 1 }, pool, signer: new LocalKeySigner(Keypair.generate().secretKey), campaigns: { get: async () => null } as any },
     { trustProxy: true, proxyHops: hops, readLimitPerMin: 3, public: { pool, campaigns: { get: async () => null } as any, cluster: "devnet", programId: kp(), decimals: 6, now: () => 1_800_000_000 } });
-  const hit = (app: ReturnType<typeof mk>, xff: string) => app.request("/v1/index", { headers: { "x-forwarded-for": xff } }).then((r) => r.status);
+  const hit = async (app: ReturnType<typeof mk>, xff: string) => (await app.request("/v1/index", { headers: { "x-forwarded-for": xff } })).status;
 
   it("rotating a forged leftmost entry does NOT reset the limit: the 4th request from the same real address is refused", async () => {
     const app = mk(); const real = "203.0.113.77"; const codes: number[] = [];
