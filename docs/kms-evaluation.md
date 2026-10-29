@@ -1,6 +1,6 @@
 # Moving the claim-signing key into a cloud KMS: evaluation
 
-Date: 2026-10-29. Status: **researched, not built.** Findings come from provider documentation and package pages reached through web search (I could read search results, not whole pages), plus a ready-to-run spike. **Nothing here has been tested against a real cloud account yet.**
+Date: 2026-10-29. Status: **PARKED until before any mainnet launch** (decided 2026-10-29: Google required a prepayment, and a KMS is not needed while everything runs on devnet; the research, the Google and AWS backends of the test script, and its passing dry runs are ready to pick up). **Researched, not built.** Findings come from provider documentation and package pages reached through web search (I could read search results, not whole pages), plus a ready-to-run spike. **Nothing here has been tested against a real cloud account yet.**
 
 ## The question
 
