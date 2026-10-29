@@ -89,6 +89,7 @@ pub mod noux {
         price: u64,
     ) -> Result<()> {
         let c = &ctx.accounts.campaign;
+        require!(campaign_is_active(&ctx.accounts.control, ctx.program_id), NouxError::CampaignNotActive);
         let now = Clock::get()?.unix_timestamp;
         require!(now <= expiry, NouxError::ClaimExpired);
         require!(
@@ -261,6 +262,19 @@ pub mod noux {
         Ok(())
     }
 
+    /// Merchant only. Pauses, resumes or permanently ends a campaign's NEW referral sales. `open_sale` refuses unless the campaign is Active; sales already open keep
+    /// settling and refunding normally, and buyers can still buy without a referral. Active and Paused can swap; anything can move to Ended; Ended is final.
+    /// The control account is created the first time it is needed (the merchant pays its rent); campaigns that were never paused have none.
+    pub fn set_campaign_state(ctx: Context<SetCampaignState>, state: CampaignState) -> Result<()> {
+        let ctl = &mut ctx.accounts.control;
+        if ctl.campaign == Pubkey::default() { ctl.campaign = ctx.accounts.campaign.key(); ctl.state = CampaignState::Active; ctl.bump = ctx.bumps.control; }
+        require!(ctl.campaign == ctx.accounts.campaign.key(), NouxError::NotMerchant);
+        let next = next_state(ctl.state, state).ok_or(NouxError::BadStateChange)?;
+        emit!(CampaignStateChanged { campaign: ctl.campaign, old_state: ctl.state, new_state: next });
+        ctl.state = next;
+        Ok(())
+    }
+
     /// Permissionless. Reclaims rent from a sale nobody paid, once its claim has expired.
     /// Only after expiry: a closed sale's nonce can then never be replayed (claim is dead).
     pub fn close_expired_sale(ctx: Context<CloseExpiredSale>) -> Result<()> {
@@ -316,6 +330,30 @@ pub fn compute_split(amount: u64, fee_bps: u16, commission_bps: u16, budget: u64
     let commission = wanted.min(budget.saturating_sub(spent));
     let merchant = amount.checked_sub(fee)?.checked_sub(commission)?;
     Some(Split { merchant, commission, fee })
+}
+
+/// The state machine. Active and Paused swap; anything can become Ended; Ended never changes; "no change" is refused so a mistaken call is visible.
+pub fn next_state(current: CampaignState, requested: CampaignState) -> Option<CampaignState> {
+    use CampaignState::*;
+    match (current, requested) {
+        (Ended, _) => None,
+        (Active, Paused) | (Paused, Active) => Some(requested),
+        (Active, Ended) | (Paused, Ended) => Some(Ended),
+        (Active, Active) | (Paused, Paused) => None,
+    }
+}
+
+/// Reads a control account's state from raw account data: `Some(state byte)` for a well-formed CampaignControl, `None` when there is no such data.
+/// Layout: 8-byte discriminator | campaign (32) | state (1) | bump (1). The state byte is the enum variant index (0 Active, 1 Paused, 2 Ended).
+pub fn control_state_byte(data: &[u8]) -> Option<u8> {
+    if data.len() < 8 + 32 + 1 || data[..8] != *CampaignControl::DISCRIMINATOR { return None; }
+    Some(data[8 + 32])
+}
+
+/// Is this campaign accepting new referral sales? A control account that does not exist, or is not ours, means yes; anything but an explicit Active state means no.
+pub fn campaign_is_active(control: &UncheckedAccount, program_id: &Pubkey) -> bool {
+    if control.owner != program_id { return true; }
+    match control.try_borrow_data() { Ok(d) => match control_state_byte(&d) { None => true, Some(b) => b == 0 }, Err(_) => false }
 }
 
 /// The budget after a top-up: strictly larger, and it must not wrap. `None` for a zero amount or an overflow.
@@ -442,6 +480,10 @@ pub struct OpenSale<'info> {
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
+    /// CHECK: the campaign's control account. Its address is fixed by the seeds, so no other account can stand in for it, and only this program can create data at
+    /// that address. An account that does not exist (or is not owned by this program) means the campaign is Active: campaigns never paused need no control account.
+    #[account(seeds = [b"control", campaign.key().as_ref()], bump)]
+    pub control: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -495,6 +537,19 @@ pub struct MerchantControl<'info> {
 }
 
 #[derive(Accounts)]
+pub struct SetCampaignState<'info> {
+    #[account(mut, address = campaign.merchant @ NouxError::NotMerchant)]
+    pub merchant: Signer<'info>,
+    pub campaign: Box<Account<'info, Campaign>>,
+    #[account(
+        init_if_needed, payer = merchant, space = 8 + CampaignControl::INIT_SPACE,
+        seeds = [b"control", campaign.key().as_ref()], bump
+    )]
+    pub control: Account<'info, CampaignControl>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct CloseExpiredSale<'info> {
     #[account(
         mut, close = rent_payer,
@@ -544,6 +599,22 @@ pub struct Campaign {
     pub bump: u8,
 }
 
+/// Whether a campaign takes new referral sales. Lives in its own account so existing campaigns need no migration.
+#[account]
+#[derive(InitSpace)]
+pub struct CampaignControl {
+    pub campaign: Pubkey,
+    pub state: CampaignState,
+    pub bump: u8,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug, InitSpace)]
+pub enum CampaignState {
+    Active,
+    Paused,
+    Ended,
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace)]
 pub enum SaleStatus {
     Open,
@@ -573,6 +644,13 @@ pub struct Sale {
     pub fee_bps: u16,
     pub status: SaleStatus,
     pub bump: u8,
+}
+
+#[event]
+pub struct CampaignStateChanged {
+    pub campaign: Pubkey,
+    pub old_state: CampaignState,
+    pub new_state: CampaignState,
 }
 
 #[event]
@@ -651,6 +729,10 @@ pub enum NouxError {
     BadBudgetIncrease,
     #[msg("attribution key must not be the all-zero key")]
     InvalidKey,
+    #[msg("this campaign is paused or ended and takes no new referral sales")]
+    CampaignNotActive,
+    #[msg("that state change is not allowed (an ended campaign never changes; pausing a paused campaign is refused)")]
+    BadStateChange,
 }
 
 #[cfg(test)]
@@ -755,6 +837,29 @@ mod tests {
         // create_campaign requires commission_bps + fee_bps <= 10000; beyond that the split would not fit in the amount
         assert_eq!(compute_split(100, 10_000, 10_000, u64::MAX, 0), None);
         assert!(compute_split(100, 5_000, 5_000, u64::MAX, 0).is_some());
+    }
+
+    #[test]
+    fn campaign_state_machine_is_exactly_the_documented_one() {
+        use CampaignState::*;
+        let all = [Active, Paused, Ended];
+        for cur in all { for req in all {
+            let want = match (cur, req) { (Ended, _) => None, (Active, Paused) | (Paused, Active) => Some(req), (_, Ended) => Some(Ended), _ => None };
+            assert_eq!(next_state(cur, req), want, "{cur:?} -> {req:?}");
+        } }
+        assert_eq!(next_state(Ended, Active), None, "an ended campaign can never be revived");
+        assert_eq!(next_state(Ended, Paused), None); assert_eq!(next_state(Ended, Ended), None);
+        assert_eq!(next_state(Active, Active), None, "a no-op is refused so a mistaken call is visible");
+    }
+
+    #[test]
+    fn control_state_is_read_from_the_documented_layout_and_nothing_else() {
+        let mut d = vec![0u8; 8 + 32 + 1 + 1]; d[..8].copy_from_slice(CampaignControl::DISCRIMINATOR);
+        for (b, want) in [(0u8, Some(0u8)), (1, Some(1)), (2, Some(2)), (7, Some(7))] { d[40] = b; assert_eq!(control_state_byte(&d), want); }
+        assert_eq!(control_state_byte(&d[..40]), None, "truncated");
+        let mut wrong = d.clone(); wrong[0] ^= 0xFF; assert_eq!(control_state_byte(&wrong), None, "another account type is not a control account");
+        assert_eq!(control_state_byte(&[]), None);
+        assert_eq!(CampaignControl::INIT_SPACE, 32 + 1 + 1, "layout the reader assumes: campaign | state | bump");
     }
 
     #[test]

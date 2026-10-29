@@ -505,6 +505,32 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "control",
+          "docs": [
+            "that address. An account that does not exist (or is not owned by this program) means the campaign is Active: campaigns never paused need no control account."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "campaign"
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -803,6 +829,72 @@
         {
           "name": "new_key",
           "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_campaign_state",
+      "docs": [
+        "Merchant only. Pauses, resumes or permanently ends a campaign's NEW referral sales. `open_sale` refuses unless the campaign is Active; sales already open keep",
+        "settling and refunding normally, and buyers can still buy without a referral. Active and Paused can swap; anything can move to Ended; Ended is final.",
+        "The control account is created the first time it is needed (the merchant pays its rent); campaigns that were never paused have none."
+      ],
+      "discriminator": [
+        150,
+        189,
+        135,
+        56,
+        200,
+        92,
+        225,
+        198
+      ],
+      "accounts": [
+        {
+          "name": "merchant",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "campaign"
+        },
+        {
+          "name": "control",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "campaign"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "state",
+          "type": {
+            "defined": {
+              "name": "CampaignState"
+            }
+          }
         }
       ]
     },
@@ -1339,6 +1431,19 @@
       ]
     },
     {
+      "name": "CampaignControl",
+      "discriminator": [
+        216,
+        60,
+        153,
+        197,
+        86,
+        244,
+        102,
+        153
+      ]
+    },
+    {
       "name": "Config",
       "discriminator": [
         155,
@@ -1390,6 +1495,19 @@
         213,
         212,
         67
+      ]
+    },
+    {
+      "name": "CampaignStateChanged",
+      "discriminator": [
+        111,
+        147,
+        15,
+        72,
+        129,
+        56,
+        75,
+        128
       ]
     },
     {
@@ -1519,6 +1637,16 @@
       "code": 6019,
       "name": "InvalidKey",
       "msg": "attribution key must not be the all-zero key"
+    },
+    {
+      "code": 6020,
+      "name": "CampaignNotActive",
+      "msg": "this campaign is paused or ended and takes no new referral sales"
+    },
+    {
+      "code": 6021,
+      "name": "BadStateChange",
+      "msg": "that state change is not allowed (an ended campaign never changes; pausing a paused campaign is refused)"
     }
   ],
   "types": [
@@ -1633,6 +1761,78 @@
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CampaignControl",
+      "docs": [
+        "Whether a campaign takes new referral sales. Lives in its own account so existing campaigns need no migration."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "campaign",
+            "type": "pubkey"
+          },
+          {
+            "name": "state",
+            "type": {
+              "defined": {
+                "name": "CampaignState"
+              }
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CampaignState",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Paused"
+          },
+          {
+            "name": "Ended"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CampaignStateChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "campaign",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_state",
+            "type": {
+              "defined": {
+                "name": "CampaignState"
+              }
+            }
+          },
+          {
+            "name": "new_state",
+            "type": {
+              "defined": {
+                "name": "CampaignState"
+              }
+            }
           }
         ]
       }
