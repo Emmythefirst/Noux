@@ -132,6 +132,34 @@ await page.waitForSelector("text=Claim key changed", { timeout: 90000 }).catch((
 rec("change claim key: wallet approved, confirmation shown", await page.getByText(/Claim key changed/).isVisible().catch(() => false), (await page.getByRole("alert").allInnerTexts().catch(() => [])).join(" | "));
 await sleep(2000); const afterKey = await readCampaign();
 rec("on-chain: the campaign now trusts the new key, and the cap is unchanged", afterKey.key === newKey && afterKey.budget === afterTop.budget, `${before.key.slice(0, 6)} -> ${afterKey.key.slice(0, 6)}`);
+// ---- pause / resume / end from the real UI ----
+const CONTROL = PublicKey.findProgramAddressSync([Buffer.from("control"), new PublicKey(camp.address).toBuffer()], PROGRAM)[0];
+const ctlState = async () => { const i = await conn.getAccountInfo(CONTROL, "confirmed"); return i ? ["active", "paused", "ended"][i.data[40]] : null; };
+rec("before any pause the campaign has no control account (it is active)", (await ctlState()) === null);
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.getByRole("button", { name: "Pause promotions" }).first().waitFor({ timeout: 90000 }).catch(() => {});
+rec("an active campaign offers Pause promotions and End campaign (not Resume)", (await page.getByRole("button", { name: "Pause promotions" }).count()) > 0 && (await page.getByRole("button", { name: "End campaign" }).count()) > 0 && (await page.getByRole("button", { name: "Resume promotions" }).count()) === 0);
+await page.getByRole("button", { name: "Pause promotions" }).first().click();
+{ const t = await page.getByRole("dialog").innerText(); rec("the pause dialog explains that buyers can still buy and open sales still settle", /can still buy from you without a referral/i.test(t) && /already open settle normally/i.test(t)); }
+await page.getByRole("dialog").getByRole("button", { name: "Pause promotions" }).click();
+await page.waitForSelector("text=Promotions paused", { timeout: 90000 }).catch(() => {});
+rec("pause: wallet approved, confirmation shown", await page.getByText(/Promotions paused/).isVisible().catch(() => false), (await page.getByRole("alert").allInnerTexts().catch(() => [])).join(" | "));
+await sleep(2000); rec("on-chain: the control account now says Paused", (await ctlState()) === "paused");
+rec("the page shows the Paused badge and banner at once, and now offers Resume", (await page.getByText("Paused", { exact: true }).count()) > 0 && /paused promotions/i.test(await page.locator("body").innerText()) && (await page.getByRole("button", { name: "Resume promotions" }).count()) > 0 && (await page.getByRole("button", { name: "Pause promotions" }).count()) === 0);
+await page.getByRole("button", { name: "Resume promotions" }).first().click();
+await page.getByRole("dialog").getByRole("button", { name: "Resume promotions" }).click();
+await page.waitForSelector("text=Promotions resumed", { timeout: 90000 }).catch(() => {});
+await sleep(2000); rec("resume: on-chain state is Active again", (await ctlState()) === "active");
+await page.getByRole("button", { name: "End campaign" }).first().click();
+const endBtn = page.getByRole("dialog").getByRole("button", { name: "End campaign for good" });
+rec("ending needs a typed confirmation: the button is disabled until END is typed", await endBtn.isDisabled());
+await page.getByRole("dialog").locator("input").fill("end");
+rec("...and enabled once END is typed", await endBtn.isEnabled());
+await endBtn.click();
+await page.waitForSelector("text=Campaign ended", { timeout: 90000 }).catch(() => {});
+await sleep(2000); rec("end: on-chain state is Ended", (await ctlState()) === "ended");
+rec("an ended campaign offers no pause, resume or end any more", (await page.getByRole("button", { name: /Pause promotions|Resume promotions|End campaign/ }).count()) === 0 && /has ended/i.test(await page.locator("body").innerText()));
+rec("an ended campaign can still be topped up from the UI (harmless, and allowed on-chain)", (await page.getByRole("button", { name: "Add budget" }).count()) > 0);
 // a wrong wallet cannot refund: reuse the dialog with no wallet match is covered by program tests; here check page errors
 rec("no uncaught page errors", errs.length === 0, errs.join(" | "));
 console.log(`\n${results.filter(Boolean).length}/${results.length} checks passed`);

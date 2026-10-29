@@ -107,7 +107,7 @@ export default function CampaignPage() {
   useEffect(() => { if (stateOverride && c?.state === stateOverride) setStateOverride(null); }, [c?.state, stateOverride]); // the index agrees now: drop the local override
   const chart = useMemo(() => dailyCounts(sales.data?.items ?? [], Date.now()), [sales.data]);
 
-  if (camp.loading) return <Page><TopNav /><main style={st("max-width: 1280px; margin: 0 auto; padding: 32px clamp(16px, 4vw, 48px);")}>{camp.waking ? <WakingBanner /> : <p role="status" style={st("font-size: 14px; color: #6B6B6B;")}>Loading campaign…</p>}</main></Page>;
+  if (camp.loading && !camp.data) return <Page><TopNav /><main style={st("max-width: 1280px; margin: 0 auto; padding: 32px clamp(16px, 4vw, 48px);")}>{camp.waking ? <WakingBanner /> : <p role="status" style={st("font-size: 14px; color: #6B6B6B;")}>Loading campaign…</p>}</main></Page>;
   if (camp.error || !c) {
     const nf = camp.error instanceof ApiError && camp.error.status === 404;
     return <Page><TopNav /><main style={st("max-width: 1280px; margin: 0 auto; padding: 56px clamp(16px, 4vw, 48px);")}><ErrorState title={nf ? "Campaign not found" : "Couldn’t load this campaign"} body={nf ? "No campaign with that address is indexed. It may be new (the index runs about every 20 s) or the address is wrong." : undefined} onRetry={nf ? undefined : camp.retry} /></main></Page>;
