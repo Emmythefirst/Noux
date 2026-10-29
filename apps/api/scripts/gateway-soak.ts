@@ -26,6 +26,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const retry = async <T,>(f: () => Promise<T>) => { for (let i = 0; ; i++) { try { return await f(); } catch (e) { if (i >= 6) throw e; await sleep(2000 * (i + 1)); } } };
 const mb = (n: number) => Math.round(n / 1048576);
 
+// a transient network error somewhere in a 12-minute run must be COUNTED and reported, not kill the run (an earlier run died this way at minute 11)
+let strays = 0; const strayMsgs = new Map<string, number>();
+for (const ev of ["unhandledRejection", "uncaughtException"] as const) process.on(ev, (e: any) => { strays++; const m = String(e?.cause?.code ?? e?.message ?? e).slice(0, 80); strayMsgs.set(m, (strayMsgs.get(m) ?? 0) + 1); });
 // 429s are retried silently inside web3.js and only printed: count them
 let rpc429 = 0; const origErr = console.error; console.error = (...a: any[]) => { if (/429/.test(String(a[0]))) rpc429++; else origErr(...a); }; const origLog = console.log;
 const mint = await createMint(conn, deployer, deployer.publicKey, null, 6);
@@ -74,14 +77,15 @@ const solStart = await conn.getBalance(deployer.publicKey), t0 = Date.now();
 // ---- sampler ----
 const samples: { t: number; rss: number; heap: number; handles: number; tracked: number; open: number; lockedSol: number; inflight: number }[] = [];
 const handles = () => (process as any)._getActiveHandles?.().length ?? 0;
-const sample = async () => { (globalThis as any).gc?.(); const m = process.memoryUsage(); const open = (await keeperChain.listOpenSales().catch(() => [])).length;
+const sample = async () => { try { await sampleInner(); } catch (e) { strays++; } };
+const sampleInner = async () => { (globalThis as any).gc?.(); const m = process.memoryUsage(); const open = (await keeperChain.listOpenSales().catch(() => [])).length;
   const s = { t: Math.round((Date.now() - t0) / 1000), rss: mb(m.rss), heap: mb(m.heapUsed), handles: handles(), tracked: gw.trackedSales(), open, lockedSol: (solStart - (await conn.getBalance(deployer.publicKey).catch(() => solStart))) / 1e9, inflight: inflight.size };
   samples.push(s); console.log(`@${String(s.t).padStart(4)}s rss ${s.rss} MB heap ${s.heap} MB handles ${s.handles} tracked ${s.tracked} open ${s.open} locked ${s.lockedSol.toFixed(3)} SOL inflight ${s.inflight} | sent ${stat.sent} 402s ${stat.ok402} other ${stat.other} err ${stat.errors} | lag max ${lagMax.toFixed(0)} ms | 429s ${rpc429} | keeper closed ${kt.closed}`); };
 while (Date.now() - t0 < MINUTES * 60_000) { await sleep(30_000); await sample(); }
 driving = false; await Promise.allSettled([...inflight]);
 console.log(`--- load stopped after ${Math.round((Date.now() - t0) / 1000)} s; waiting for the keeper to close what is left ---`);
 const myOpen = async () => (await retry(() => (program.account as any).sale.all([{ memcmp: { offset: 8, bytes: campaign.toBase58() } }]))).filter((a: any) => "open" in a.account.status).length;
-let left = await myOpen(); const dl = Date.now() + 10 * 60_000; while (left > 0 && Date.now() < dl) { await sleep(20_000); left = await myOpen(); if (Date.now() - t0 > 0) await sample(); }
+let left = await myOpen().catch(() => -1); const dl = Date.now() + 10 * 60_000; while (left > 0 && Date.now() < dl) { await sleep(20_000); left = await myOpen().catch(() => left); await sample(); }
 keeping = false; clearInterval(lagTimer);
 
 // ---- report ----
@@ -97,5 +101,6 @@ console.log(`gateway events: ${JSON.stringify(events)}`);
 console.log(`memory: heap first-half avg -> second-half avg drift ${heapDrift.toFixed(1)} MB; rss drift ${rssDrift.toFixed(1)} MB; max handles ${Math.max(...samples.map((s) => s.handles))}; tracked sales max ${Math.max(...samples.map((s) => s.tracked))}`);
 console.log(`event loop lag: max ${lagMax.toFixed(0)} ms, p99 ${pct(lags, .99).toFixed(0)} ms`);
 console.log(`keeper: ${kt.ticks} ticks, closed ${kt.closed}, failed ${kt.failed}, slowest tick ${kt.maxMs} ms; open sales left on chain from this test: ${left}`);
+console.log(`stray async errors survived (network blips): ${strays} ${JSON.stringify([...strayMsgs])}`);
 console.log(`RPC 429 retries seen: ${rpc429}; payer SOL ${(solStart / 1e9).toFixed(4)} -> ${(solEnd / 1e9).toFixed(4)} (net ${((solEnd - solStart) / 1e9).toFixed(5)}: fees only if everything was closed)`);
 srv.close(); await pool.end(); process.exit(left === 0 ? 0 : 1);
