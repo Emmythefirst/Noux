@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { st } from "../lib/css";
 import { useApi, useIndexFreshness, type Campaign, type Page as ApiPage, type Stats } from "../lib/api";
 import { CATEGORIES, bpsPct, fmt2, fmtAmount, initials, short } from "../lib/format";
-import { Disclosure, ErrorState, Freshness, Page, SampleBadge, SkeletonCards, StateBadge, TopNav, WakingBanner } from "../components/common";
+import { Disclosure, ErrorState, Freshness, Page, SampleBadge, SkeletonCards, StatusChip, TopNav, WakingBanner } from "../components/common";
 
 const CAT_CHIPS: [string, string | null][] = [["All", null], ["AI and text", "ai-text"], ["Research and search", "research-search"], ["Data feeds", "data-feeds"], ["Developer tools", "developer-tools"]];
 const SORTS: [string, string][] = [["newest", "Newest"], ["commission", "Highest commission"], ["volume", "Most settled volume"]];
@@ -14,45 +14,63 @@ function useDebounced<T>(v: T, ms: number): T {
   return d;
 }
 
+/** "$0.015 on a $0.10 sale" for a single listed price; null for ranges or prices we cannot read (never guess). */
+function commissionExample(displayPrice: string | undefined, bps: number): string | null {
+  const m = displayPrice && /^\$?\s*(\d+(?:\.\d+)?)\s*(?:USDC)?(?:\s*\/.*)?$/i.exec(displayPrice.trim());
+  if (!m) return null;
+  const units = Math.round(Number(m[1]) * 1e6);
+  const comm = Math.floor((units * bps) / 10000);
+  const trim = (u: number) => (u / 1e6).toFixed(6).replace(/0+$/, "").replace(/\.(\d)$/, ".$10");
+  return `$${trim(comm)} on a $${trim(units)} sale`;
+}
+
+const CLAMP2 = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } as const;
+
 function CampaignCard({ c }: { c: Campaign }) {
   const spent = c.status === "budget_exhausted";
   const total = BigInt(c.budget.total);
   const pct = total > 0n ? Number((BigInt(c.budget.remaining) * 100n) / total) : 0;
   const l = c.listing;
   const name = l?.name ?? "Unlisted campaign";
+  const example = commissionExample(l?.displayPrice, c.commissionBps);
+ 
+  // a refund rate next to "0 sales" reads like a bug; say what happened in plain counts instead
+  const refunds = c.sales.settled === 0 ? (c.sales.refunded > 0 ? `${c.sales.refunded} refunded` : null) : c.sales.refundRate === null ? null : `${(c.sales.refundRate * 100).toFixed(c.sales.refundRate === 0 ? 0 : 1)}% refunds`;
   return (
     <article className="ch press fadein" style={st("display: flex; flex-direction: column; border: 1px solid #EBEBEB; border-radius: 12px; background: #FFFFFF; overflow: hidden;")}>
-      <Link to={`/campaigns/${c.address}`} style={st("display: flex; flex-direction: column; gap: 16px; padding: 20px 20px 16px; color: #333333;")}>
+      <Link to={`/campaigns/${c.address}`} aria-label={`${name}: view campaign`} style={st("flex: 1; display: flex; flex-direction: column; gap: 16px; padding: 20px; color: #333333;")}>
         <div style={st("display: flex; align-items: flex-start; gap: 12px;")}>
           <div aria-hidden="true" style={st("width: 36px; height: 36px; flex: none; border-radius: 10px; background: #F4F4F5; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #111111;")}>{initials(name)}</div>
-          <div style={st("flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;")}>
-            <div style={st("display: flex; align-items: center; gap: 8px; flex-wrap: wrap;")}>
-              <h2 style={st("font-size: 16px; line-height: 20px; letter-spacing: -0.01em; font-weight: 500; color: #111111;")}>{name}</h2>
-              {l?.isSample && <SampleBadge />}<StateBadge state={c.state} />
+          <div style={st("flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;")}>
+            <div style={st("display: flex; align-items: center; gap: 8px; min-width: 0;")}>
+              <h2 style={st("font-size: 16px; line-height: 20px; letter-spacing: -0.01em; font-weight: 500; color: #111111; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;")}>{name}</h2>
+              {l?.isSample && <SampleBadge />}
             </div>
-            <span style={st("font-size: 13px; color: #6B6B6B;")}>{l ? CATEGORIES[l.category] ?? l.category : "—"} · <span className="mono" style={st("font-size: 12px;")}>{short(c.merchant)}</span></span>
+            <span style={st("font-size: 13px; color: #6B6B6B;")}>{l ? CATEGORIES[l.category] ?? l.category : "—"}</span>
           </div>
-          <span style={st("flex: none; height: 20px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; " + (spent ? "background: #FFF1D6; color: #8A4B00;" : "background: #CAFACE; color: #0E7A2F;"))}>{spent ? "Budget spent" : "Active"}</span>
+          <StatusChip state={c.state} spent={spent} />
         </div>
-        <p style={st("font-size: 14px; line-height: 20px; color: #333333; text-wrap: pretty;")}>{l?.description ?? "This campaign has no signed listing."}</p>
-        <dl className="tn" style={st("margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;")}>
-          <div style={st("display: flex; flex-direction: column; gap: 2px;")}><dt style={st("font-size: 12px; color: #6B6B6B;")}>Price</dt><dd style={st("margin: 0; font-size: 14px; font-weight: 500; color: #111111;")}>{l?.displayPrice ?? "—"}</dd></div>
-          <div style={st("display: flex; flex-direction: column; gap: 2px;")}><dt style={st("font-size: 12px; color: #6B6B6B;")}>Commission</dt><dd style={st("margin: 0; font-size: 14px; font-weight: 500; color: #0F766E;")}>{bpsPct(c.commissionBps, c.commissionBps % 100 ? 2 : 0)}</dd></div>
-          <div style={st("display: flex; flex-direction: column; gap: 2px;")}><dt style={st("font-size: 12px; color: #6B6B6B;")}>You earn / sale</dt><dd style={st("margin: 0; font-size: 14px; font-weight: 500; color: #111111;")}>{bpsPct(c.commissionBps, c.commissionBps % 100 ? 2 : 0)} of price</dd></div>
+        <p style={{ ...st("font-size: 14px; line-height: 20px; color: #333333; text-wrap: pretty; min-height: 40px;"), ...CLAMP2 }}>{l?.description ?? "This campaign has no signed listing."}</p>
+        <dl className="tn" style={st("margin: 0; padding-top: 16px; border-top: 1px solid #EBEBEB; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px;")}>
+          <div style={st("display: flex; flex-direction: column; gap: 2px;")}>
+            <dt style={st("font-size: 12px; color: #6B6B6B;")}>Price</dt>
+            <dd style={st("margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; color: #111111;")}>{l?.displayPrice ?? "—"}</dd>
+            <span style={st("font-size: 12px; color: #6B6B6B;")}>per call</span>
+          </div>
+          <div style={st("display: flex; flex-direction: column; gap: 2px;")}>
+            <dt style={st("font-size: 12px; color: #6B6B6B;")}>Distributor commission</dt>
+            <dd style={st("margin: 0; font-size: 20px; line-height: 24px; font-weight: 500; color: #0F766E;")}>{bpsPct(c.commissionBps, c.commissionBps % 100 ? 2 : 0)}</dd>
+            <span style={st("font-size: 12px; color: #6B6B6B;")}>{example ?? "of each eligible sale"}</span>
+          </div>
         </dl>
         <div style={st("display: flex; flex-direction: column; gap: 6px;")}>
-          <div className="tn" style={st("display: flex; justify-content: space-between; font-size: 12px; color: #6B6B6B;")}><span>Commission budget left (cap)</span><span style={st("color: #333333;")}>{fmt2(c.budget.remaining)} of {fmt2(c.budget.total)} USDC</span></div>
-          <div aria-hidden="true" style={st("height: 4px; border-radius: 9999px; background: #F4F4F5; overflow: hidden;")}><div style={{ ...st("height: 100%; border-radius: 9999px;"), width: `${pct}%`, background: pct < 15 ? "#8A4B00" : "#0F766E" }} /></div>
-        </div>
-        <div className="tn" style={st("display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: #6B6B6B;")}>
-          <span>Hold {c.holdSecs} s</span>
-          <span>Refund rate <span style={st("color: #333333;")}>{c.sales.refundRate === null ? "—" : (c.sales.refundRate * 100).toFixed(1) + "%"}</span></span>
-          <span>Settled sales <span style={st("color: #333333;")}>{c.sales.settled}</span></span>
+          <div className="tn" style={st("display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: #6B6B6B;")}><span>Commission budget (cap)</span><span style={st("color: #333333;")}>{fmt2(c.budget.remaining)} of {fmt2(c.budget.total)} USDC left</span></div>
+          <div aria-hidden="true" style={st("height: 3px; border-radius: 9999px; background: #F4F4F5; overflow: hidden;")}><div style={{ ...st("height: 100%; border-radius: 9999px;"), width: `${pct}%`, background: pct < 15 ? "#8A4B00" : "#0F766E" }} /></div>
         </div>
       </Link>
-      <div style={st("margin-top: auto; border-top: 1px solid #EBEBEB; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #FAFAFA;")}>
-        <span style={st("font-size: 12px; color: #6B6B6B;")}>Distributors earn a commission on this campaign.</span>
-        <Link className="press bs" to={`/campaigns/${c.address}#promote`} style={st("flex: none; height: 28px; padding: 0 12px; border-radius: 8px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center;")}>Get referral link</Link>
+      <div className="tn" style={st("border-top: 1px solid #EBEBEB; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; color: #6B6B6B;")}>
+        <span style={st("min-width: 0;")}>{[`${c.holdSecs} s hold`, refunds, `${c.sales.settled} ${c.sales.settled === 1 ? "sale" : "sales"}`].filter(Boolean).join(" · ")}</span>
+        <Link className="tap" to={`/campaigns/${c.address}`} style={st("flex: none; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center;")}>View campaign →</Link>
       </div>
     </article>
   );
@@ -86,26 +104,26 @@ export default function Directory() {
         <div style={st("display: flex; flex-wrap: wrap; gap: 24px; align-items: end; justify-content: space-between;")}>
           <div style={st("display: flex; flex-direction: column; gap: 10px; max-width: 640px;")}>
             <h1 style={st("font-size: clamp(2rem, 1.4rem + 2vw, 2.75rem); line-height: 1.05; letter-spacing: -0.03em; font-weight: 500; color: #111111;")}>Campaigns</h1>
-            <p style={st("font-size: 16px; line-height: 24px; color: #333333;")}>Paid x402 services that pay a commission when you bring them a buyer. Every number below is read from the chain.</p>
+            <p style={st("font-size: 16px; line-height: 24px; color: #333333;")}>Discover paid x402 services and earn commissions by bringing them paying customers. Every number is read from the chain.</p>
           </div>
           <Freshness ageSeconds={fresh.info?.ageSeconds} fetchedAt={fresh.fetchedAt} now={fresh.now} error={fresh.error} />
         </div>
 
         {/* Platform volume split: honest */}
         <section aria-label="Settled volume by source" style={st("display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); border: 1px solid #EBEBEB; border-radius: 12px; overflow: hidden;")}>
-          <div style={st("padding: 16px 20px; display: flex; flex-direction: column; gap: 6px; border-right: 1px solid #EBEBEB;")}>
+          <div style={st("padding: 12px 20px; display: flex; flex-direction: column; gap: 4px; border-right: 1px solid #EBEBEB;")}>
             <span style={st("font-size: 13px; font-weight: 500; color: #6B6B6B;")}>Listed campaigns</span>
-            <span className="tn" style={st("font-size: 24px; line-height: 30px; letter-spacing: -0.02em; font-weight: 500; color: #111111;")}>{stats.data ? stats.data.totals.listedCampaigns : "—"}</span>
+            <span className="tn" style={st("font-size: 20px; line-height: 26px; letter-spacing: -0.02em; font-weight: 500; color: #111111;")}>{stats.data ? stats.data.totals.listedCampaigns : "—"}</span>
           </div>
-          <div style={st("padding: 16px 20px; display: flex; flex-direction: column; gap: 6px; border-right: 1px solid #EBEBEB;")}>
+          <div style={st("padding: 12px 20px; display: flex; flex-direction: column; gap: 4px; border-right: 1px solid #EBEBEB;")}>
             <span style={st("font-size: 13px; font-weight: 500; color: #6B6B6B;")}>Settled volume · real services</span>
-            <span className="tn" style={st("font-size: 24px; line-height: 30px; letter-spacing: -0.02em; font-weight: 500; color: #111111;")}>
+            <span className="tn" style={st("font-size: 20px; line-height: 26px; letter-spacing: -0.02em; font-weight: 500; color: #111111;")}>
               {vs && vs.listed.settled > 0 ? <>{fmt2(vs.listed.volume, dec)} <span style={st("font-size: 14px; color: #6B6B6B; font-weight: 400;")}>USDC</span></> : "—"}
             </span>
           </div>
-          <div style={st("padding: 16px 20px; display: flex; flex-direction: column; gap: 6px; background: #FAFAFA;")}>
+          <div style={st("padding: 12px 20px; display: flex; flex-direction: column; gap: 4px; background: #FAFAFA;")}>
             <span style={st("font-size: 13px; font-weight: 500; color: #6B6B6B; display: flex; align-items: center; gap: 8px;")}>Settled volume · <SampleBadge style={{ border: "1px solid #EBEBEB" }} /></span>
-            <span className="tn" style={st("font-size: 24px; line-height: 30px; letter-spacing: -0.02em; font-weight: 500; color: #111111;")}>
+            <span className="tn" style={st("font-size: 20px; line-height: 26px; letter-spacing: -0.02em; font-weight: 500; color: #111111;")}>
               {vs ? <>{fmt2(vs.sample.volume, dec)} <span style={st("font-size: 14px; color: #6B6B6B; font-weight: 400;")}>USDC</span></> : "—"}
             </span>
           </div>
@@ -114,7 +132,7 @@ export default function Directory() {
         {/* Toolbar */}
         <div style={st("display: flex; flex-direction: column; gap: 12px;")}>
           <div style={st("display: flex; flex-wrap: wrap; gap: 12px; align-items: center;")}>
-            <div style={st("position: relative; flex: 1 1 280px; max-width: 420px;")}>
+            <div style={st("position: relative; flex: 1 1 320px;")}>
               <label htmlFor="q" className="vh">Search campaigns</label>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" strokeWidth="1.5" aria-hidden="true" style={st("position: absolute; left: 12px; top: 12px;")}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
               <input id="q" type="search" autoComplete="off" placeholder="Search services or merchants" value={q} onChange={(e) => setQ(e.target.value)}
@@ -129,10 +147,6 @@ export default function Directory() {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#333333" strokeWidth="1.5" aria-hidden="true" style={st("position: absolute; right: 12px; top: 13px; pointer-events: none;")}><path d="m6 9 6 6 6-6" /></svg>
               </div>
             </div>
-            <label style={st("display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #333333; cursor: pointer; height: 40px;")}>
-              <input type="checkbox" checked={activeOnly} onChange={() => setActiveOnly((v) => !v)} style={st("width: 16px; height: 16px; accent-color: #0F766E; margin: 0;")} />
-              Only campaigns with budget left
-            </label>
           </div>
           <div role="group" aria-label="Category" style={st("display: flex; flex-wrap: wrap; gap: 8px;")}>
             {CAT_CHIPS.map(([label, value]) => {
@@ -143,6 +157,10 @@ export default function Directory() {
               );
             })}
           </div>
+          <label style={st("display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #333333; cursor: pointer; height: 28px;")}>
+              <input type="checkbox" checked={activeOnly} onChange={() => setActiveOnly((v) => !v)} style={st("width: 16px; height: 16px; accent-color: #0F766E; margin: 0;")} />
+              Only campaigns with commission budget remaining
+            </label>
         </div>
 
         <div style={st("display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: #6B6B6B;")} role="status">

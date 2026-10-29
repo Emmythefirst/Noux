@@ -40,7 +40,7 @@ h2[id],h3[id],section[id]{scroll-margin-top:84px}
 .vh{position:absolute;left:-9999px}
 @media (max-width:1100px){.toc-col{display:none !important}}
 @media (max-width:760px){.hide-sm{display:none !important}}
-@media (max-width:520px){.hide-xs{display:none !important}}
+@media (max-width:520px){.hide-xs{display:none !important}.topnav{gap:10px !important}}
 /* App sidebar: a column on desktop; on a phone only the section links remain, as one swipeable row, so the page body is not pushed below the fold. */
 .sb-wrap{display:contents}
 @media (max-width:760px){

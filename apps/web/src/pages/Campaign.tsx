@@ -8,7 +8,7 @@ import { referralLink } from "../lib/buy";
 import { useWallet } from "../lib/wallet-connect";
 import { ListingModal } from "../components/listing-modal";
 import { RotateKeyDialog, StateDialog, TopUpDialog } from "../components/campaign-controls";
-import { Addr, isUnderpaid, openText, Disclosure, Dot, ErrorState, Page, SaleBadge, SampleBadge, StateBadge, TopNav, WakingBanner } from "../components/common";
+import { Addr, isUnderpaid, openText, Disclosure, Dot, ErrorState, Page, SaleBadge, SampleBadge, StateBadge, StatusChip, TopNav, WakingBanner } from "../components/common";
 
 const H2 = "font-size: 16px; line-height: 20px; letter-spacing: -0.01em; font-weight: 500; color: #111111;";
 const RING = "box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 1px 1px -.5px rgb(0 0 0 / .06), 0 3px 3px -1.5px rgb(0 0 0 / .06), 0 6px 6px -3px rgb(0 0 0 / .06), 0 12px 12px -6px rgb(0 0 0 / .06);";
@@ -138,6 +138,9 @@ export default function CampaignPage() {
     { label: "Top buyer share", value: m.settled ? String(Math.round(m.topBuyerShare * 100)) : "—", unit: m.settled ? "%" : "", note: m.settled ? `${topBuyerSales} of ${m.settled} sales, one wallet` : "No settled sales yet" },
   ];
 
+  const primary = [metrics[0], metrics[3], metrics[4]]; // sales, volume, commissions: what a distributor weighs first
+  const secondary = metrics.filter((x) => !primary.includes(x));
+
   return (
     <Page>
       <TopNav />
@@ -150,8 +153,7 @@ export default function CampaignPage() {
             <div style={st("display: flex; flex-direction: column; gap: 8px;")}>
               <div style={st("display: flex; align-items: center; gap: 10px; flex-wrap: wrap;")}>
                 <h1 style={st("font-size: 32px; line-height: 36px; letter-spacing: -0.025em; font-weight: 500; color: #111111;")}>{name}</h1>
-                {l?.isSample && <SampleBadge />}<StateBadge state={stateOverride ?? c.state} />
-                <span style={st("height: 20px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; " + (spent ? "background: #FFF1D6; color: #8A4B00;" : "background: #CAFACE; color: #0E7A2F;"))}><Dot color={spent ? "#8A4B00" : "#15B042"} />{spent ? "Budget spent" : "Active"}</span>
+                {l?.isSample && <SampleBadge />}<StatusChip state={stateOverride ?? c.state} spent={spent} />
               </div>
               <p style={st("font-size: 14px; line-height: 20px; color: #333333; max-width: 560px;")}>{l ? l.description : "This campaign is unlisted: its merchant hasn’t published a listing, so it isn’t in the directory. Anyone with the link can still see it. Only promote it if you know and trust the merchant."}</p>
               <div style={st("display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: #6B6B6B; align-items: center;")}>
@@ -166,18 +168,24 @@ export default function CampaignPage() {
           {(stateOverride ?? c.state) === "paused" && <p role="status" style={st("width: 100%; font-size: 13px; line-height: 19px; color: #8A4B00; background: #FFF1D6; border-radius: 8px; padding: 10px 12px;")}>The merchant has paused promotions. No new referral sales are being opened right now; you can still buy without a referral, and referral links resume working if the merchant resumes.</p>}
           {(stateOverride ?? c.state) === "ended" && <p role="status" style={st("width: 100%; font-size: 13px; line-height: 19px; color: #333333; background: #F4F4F5; border-radius: 8px; padding: 10px 12px;")}>This campaign has ended. It takes no new referral sales and will not reopen. Past receipts stay public and verifiable.</p>}
           <div style={st("display: flex; gap: 8px; flex-wrap: wrap;")}>
-          {me && me === c.merchant && <button className="press bs" type="button" onClick={() => setListing(true)} style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 14px Inter, sans-serif; cursor: pointer;")}>{c.listing ? "Edit listing" : "List this campaign"}</button>}
-          {me && me === c.merchant && <button className="press bs" type="button" onClick={() => setControls("topup")} style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 14px Inter, sans-serif; cursor: pointer;")}>Add budget</button>}
-          {me && me === c.merchant && <button className="press bs" type="button" onClick={() => setControls("key")} style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 14px Inter, sans-serif; cursor: pointer;")}>Change claim key</button>}
-          {me && me === c.merchant && (stateOverride ?? c.state ?? "active") === "active" && <button className="press bs" type="button" onClick={() => setControls("pause")} style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 14px Inter, sans-serif; cursor: pointer;")}>Pause promotions</button>}
-          {me && me === c.merchant && (stateOverride ?? c.state) === "paused" && <button className="press bs" type="button" onClick={() => setControls("resume")} style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 14px Inter, sans-serif; cursor: pointer;")}>Resume promotions</button>}
-          {me && me === c.merchant && (stateOverride ?? c.state ?? "active") !== "ended" && <button className="press bs" type="button" onClick={() => setControls("end")} style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 14px Inter, sans-serif; cursor: pointer;")}>End campaign</button>}
-          {me && me === c.merchant && <Link className="press bs" to="/app/merchant" style={st("height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center;")}>Manage in merchant console</Link>}
           <a className="press bp" href="#promote" style={st("height: 40px; padding: 0 16px; border-radius: 10px; background: #0F766E; color: #FFFFFF; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 8px;")}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1" /><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" /></svg>Get referral link
           </a>
           </div>
         </div>
+
+        {me && me === c.merchant && (
+          <section aria-label="Merchant controls" style={st("display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px; border: 1px solid #EBEBEB; border-radius: 12px; background: #FAFAFA;")}>
+            <span style={st("font-size: 12px; font-weight: 500; color: #6B6B6B; margin-right: 8px;")}>Your campaign</span>
+          {me && me === c.merchant && <button className="press bs" type="button" onClick={() => setListing(true)} style={st("height: 32px; padding: 0 12px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 13px Inter, sans-serif; cursor: pointer;")}>{c.listing ? "Edit listing" : "List this campaign"}</button>}
+          {me && me === c.merchant && <button className="press bs" type="button" onClick={() => setControls("topup")} style={st("height: 32px; padding: 0 12px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 13px Inter, sans-serif; cursor: pointer;")}>Add budget</button>}
+          {me && me === c.merchant && <button className="press bs" type="button" onClick={() => setControls("key")} style={st("height: 32px; padding: 0 12px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 13px Inter, sans-serif; cursor: pointer;")}>Change claim key</button>}
+          {me && me === c.merchant && (stateOverride ?? c.state ?? "active") === "active" && <button className="press bs" type="button" onClick={() => setControls("pause")} style={st("height: 32px; padding: 0 12px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 13px Inter, sans-serif; cursor: pointer;")}>Pause promotions</button>}
+          {me && me === c.merchant && (stateOverride ?? c.state) === "paused" && <button className="press bs" type="button" onClick={() => setControls("resume")} style={st("height: 32px; padding: 0 12px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 13px Inter, sans-serif; cursor: pointer;")}>Resume promotions</button>}
+          {me && me === c.merchant && (stateOverride ?? c.state ?? "active") !== "ended" && <button className="press bs" type="button" onClick={() => setControls("end")} style={st("height: 32px; padding: 0 12px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 13px Inter, sans-serif; cursor: pointer;")}>End campaign</button>}
+          {me && me === c.merchant && <Link className="press bs" to="/app/merchant" style={st("height: 32px; padding: 0 12px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center;")}>Manage in merchant console</Link>}
+          </section>
+        )}
 
         {/* Terms */}
         <section aria-label="Campaign terms" style={st("display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); border: 1px solid #EBEBEB; border-radius: 12px;")}>
@@ -208,15 +216,24 @@ export default function CampaignPage() {
                 <h2 id="m-h" style={st(H2)}>What this campaign has done</h2>
                 <span className="tn" style={st("font-size: 12px; color: #6B6B6B;")}>All time · {fresh.info?.ageSeconds != null ? `indexed ${fresh.info.ageSeconds + Math.max(0, Math.floor((fresh.now - fresh.fetchedAt) / 1000))} s ago` : "index age unknown"}</span>
               </div>
-              <div style={st("display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 1px; background: #EBEBEB; border: 1px solid #EBEBEB; border-radius: 12px; overflow: hidden;")}>
-                {metrics.map((x) => (
-                  <div key={x.label} style={st("background: #FFFFFF; padding: 16px; display: flex; flex-direction: column; gap: 6px;")}>
+              <div style={st("display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 1px; background: #EBEBEB; border: 1px solid #EBEBEB; border-radius: 12px; overflow: hidden;")}>
+                {primary.map((x) => (
+                  <div key={x.label} style={st("background: #FFFFFF; padding: 20px; display: flex; flex-direction: column; gap: 6px;")}>
                     <span style={st("font-size: 12px; color: #6B6B6B;")}>{x.label}</span>
-                    <span className="tn" style={st("font-size: 24px; line-height: 30px; letter-spacing: -0.02em; font-weight: 500; color: #111111;")}>{x.value}<span style={st("font-size: 13px; color: #6B6B6B; font-weight: 400;")}>{x.unit}</span></span>
+                    <span className="tn" style={st("font-size: 28px; line-height: 34px; letter-spacing: -0.02em; font-weight: 500; color: #111111;")}>{x.value}<span style={st("font-size: 13px; color: #6B6B6B; font-weight: 400;")}>{x.unit}</span></span>
                     <span style={st("font-size: 12px; color: #6B6B6B;")}>{x.note}</span>
                   </div>
                 ))}
               </div>
+              <dl className="tn" style={st("margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); gap: 16px 24px; padding: 0 4px;")}>
+                {secondary.map((x) => (
+                  <div key={x.label} style={st("display: flex; flex-direction: column; gap: 2px;")}>
+                    <dt style={st("font-size: 12px; color: #6B6B6B;")}>{x.label}</dt>
+                    <dd style={st("margin: 0; font-size: 16px; line-height: 22px; font-weight: 500; color: #111111;")}>{x.value}<span style={st("font-size: 12px; color: #6B6B6B; font-weight: 400;")}>{x.unit}</span></dd>
+                    <span style={st("font-size: 11px; line-height: 15px; color: #6B6B6B;")}>{x.note}</span>
+                  </div>
+                ))}
+              </dl>
               {l?.isSample && <p style={st("font-size: 12px; color: #6B6B6B; display: flex; align-items: center; gap: 8px;")}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" strokeWidth="1.5" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>Sample service: these sales came from the Noux team’s test wallets, not real customers.</p>}
             </section>
 

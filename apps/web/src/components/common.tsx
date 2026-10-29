@@ -31,6 +31,13 @@ export const StateBadge = ({ state, style }: { state?: "active" | "paused" | "en
   <span style={{ ...st(state === "paused" ? "height: 20px; padding: 0 8px; border-radius: 6px; background: #FFF1D6; color: #8A4B00; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center;" : "height: 20px; padding: 0 8px; border-radius: 6px; background: #F4F4F5; color: #333333; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center;"), ...style }}>{state === "paused" ? "Paused" : "Ended"}</span>
 ) : null;
 
+/** One quiet status marker for cards and the campaign header: paused/ended as a badge, budget spent as an amber badge, otherwise a green dot and the word Active. */
+export const StatusChip = ({ state, spent }: { state?: "active" | "paused" | "ended"; spent: boolean }) => {
+  if (state === "paused" || state === "ended") return <StateBadge state={state} />;
+  if (spent) return <span style={st("flex: none; height: 20px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; background: #FFF1D6; color: #8A4B00;")}>Budget spent</span>;
+  return <span style={st("flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #6B6B6B;")}><span aria-hidden="true" style={st("width: 6px; height: 6px; border-radius: 9999px; background: #15B042;")} />Active</span>;
+};
+
 export const SampleBadge = ({ style }: { style?: CSSProperties }) => (
   <span style={{ ...st("height: 20px; padding: 0 8px; border-radius: 6px; background: #F4F4F5; color: #333333; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center;"), ...style }}>Sample</span>
 );
@@ -100,7 +107,7 @@ export function TopNav({ variant = "app", surface = "#FFFFFF", cta = false }: { 
   const link = ({ isActive }: { isActive: boolean }): CSSProperties => (isActive ? st("color: #111111; font-weight: 500;") : st("color: #6B6B6B;"));
   return (
     <header style={st(`position: sticky; top: 0; z-index: 20; background: var(${surface === "#FFFFFF" ? "--glass" : "--glass-2"}); backdrop-filter: saturate(180%) blur(12px); -webkit-backdrop-filter: saturate(180%) blur(12px); border-bottom: 1px solid #EBEBEB;`)}>
-      <nav aria-label="Primary" style={st("max-width: 1280px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 48px); height: 60px; display: flex; align-items: center; gap: 32px;")}>
+      <nav className="topnav" aria-label="Primary" style={st("max-width: 1280px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 48px); height: 60px; display: flex; align-items: center; gap: 32px;")}>
         {variant === "app" && <NavMenu />}
         <Link to="/" aria-label="Noux home" style={st("display: flex; align-items: center; gap: 10px; color: #111111; margin-left: " + (variant === "app" ? "-16px" : "0") + ";")}>
           <Mark />
@@ -120,7 +127,7 @@ export function TopNav({ variant = "app", surface = "#FFFFFF", cta = false }: { 
           </>
         ) : (
           <>
-            {cta && <Link className="press bi" to="/app/merchant" style={st("height: 36px; padding: 0 16px; border-radius: 9999px; background: #111111; color: #FFFFFF; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; white-space: nowrap;")}>{w.address ? "My campaigns" : "Create campaign"}</Link>}
+            {cta && <Link className="press bi hide-xs" to="/app/merchant" style={st("height: 36px; padding: 0 16px; border-radius: 9999px; background: #111111; color: #FFFFFF; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; white-space: nowrap;")}>{w.address ? "My campaigns" : "Create campaign"}</Link>}
             <DevnetBadge />
             <WalletButton compact />
           </>
