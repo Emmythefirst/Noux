@@ -3,21 +3,25 @@ import { cors } from "hono/cors";
 import { z } from "zod";
 import { issueClaim, IssuanceError, type Deps } from "./issuance";
 import { publicRoutes, type PublicDeps } from "./public/routes";
+import { clientIpFrom } from "./client-ip";
 
 const body = z.object({
   campaign: z.string().min(32).max(44), distributor: z.string().min(32).max(44), buyer: z.string().min(32).max(44),
   price: z.string().regex(/^\d{1,20}$/), ts: z.number().int(), buyerSignature: z.string().min(80).max(100),
 }).strict();
 
-export function createApp(deps: Deps, opts: { trustProxy: boolean; clientIp?: (c: any) => string; public?: PublicDeps; readLimitPerMin?: number } = { trustProxy: false }) {
+export function createApp(deps: Deps, opts: { trustProxy: boolean; proxyHops?: number; clientIp?: (c: any) => string; public?: PublicDeps; readLimitPerMin?: number } = { trustProxy: false }) {
   const app = new Hono();
   // Browsers (the directory UI, buyer agents in a page) call this API cross-origin. No cookies or credentials are used anywhere.
   app.use("*", cors({ origin: "*", allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], allowHeaders: ["content-type"], maxAge: 600 }));
   const ipOf = (c: any): string => {
     if (opts.clientIp) return opts.clientIp(c);
-    if (opts.trustProxy) { const f = c.req.header("x-forwarded-for"); if (f) return f.split(",")[0].trim(); }
-    return c.env?.incoming?.socket?.remoteAddress ?? "unknown";
+    const peer = c.env?.incoming?.socket?.remoteAddress as string | undefined;
+    if (opts.trustProxy) return clientIpFrom(c.req.header("x-forwarded-for"), opts.proxyHops ?? 1, peer);
+    return peer ?? "unknown";
   };
+  // what this service believes your address is, and how many forwarded entries it saw: lets an operator check TRUSTED_PROXY_HOPS against the real proxy chain
+  app.get("/v1/whoami", (c) => c.json({ ip: ipOf(c), forwardedEntries: (c.req.header("x-forwarded-for") ?? "").split(",").filter((x) => x.trim()).length, proxyHops: opts.trustProxy ? (opts.proxyHops ?? 1) : 0, trustProxy: opts.trustProxy }));
   if (opts.public) {
     // coarse per-IP read limiter (in memory; the claim-issuance limits are the Postgres-backed ones)
     const max = opts.readLimitPerMin ?? 240; const hits = new Map<string, { n: number; reset: number }>();

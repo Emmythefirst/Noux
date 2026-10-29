@@ -15,7 +15,7 @@ Status: devnet, **no independent audit**. Read this before putting real money ne
 ## What the gateway and claim API enforce (off-chain)
 
 - A claim's price must equal the route price exactly, and the payer must be the claim's buyer. These checks live in the **merchant's gateway**: a merchant who serves a paid route without the gateway gets on-chain attribution and the on-chain split, but not these two checks.
-- Claim requests are signed by the buyer (60 s freshness) and rate-limited per distributor, buyer, campaign and IP; there is a maximum price.
+- Claim requests are signed by the buyer (60 s freshness) and rate-limited per distributor, buyer, campaign and IP; there is a maximum price. The per-IP limits use the address our own proxy appended to `X-Forwarded-For` (counted from the right, `TRUSTED_PROXY_HOPS`), never the leftmost entry, which a client can forge; `GET /v1/whoami` shows what the service believes your address is.
 - Listings and removals are signed by the campaign's merchant, which the API reads from the chain; messages carry different tags so one cannot be replayed as the other.
 
 ## Trust assumptions
@@ -43,7 +43,7 @@ Status: devnet, **no independent audit**. Read this before putting real money ne
 
 ## The buy page (`/buy/<campaign>?ref=<wallet>`)
 
-- **The endpoint, not the listing, sets the price and the payee.** The page reads the amount, asset and `payTo` from the service's own `402` answer and asks for a claim at that price. It does not compare them with the price in the merchant's listing or check the asset. A merchant (or anyone who controls a listed endpoint URL) can therefore ask for more than the listing says, up to the claim service's maximum price. The only safeguards are the wallet's approval prompt, which the buyer must read, and the price shown on the page, which comes from the same `402` answer.
+- **The page checks the 402 against the campaign and its listing before the wallet is asked.** It refuses (and says why) if the service asks for a different token than the campaign's, a different network, an unsupported scheme, or an amount outside the listed price (an exact listed price must match; a listed range such as `$0.03-$0.10` accepts anything inside it; a listing with no readable number cannot be compared and is not blocked). The payee (`payTo`) is not checked: it is the sale vault for a referred purchase and the merchant's wallet for a plain one, and the page cannot tell which is honest, so the wallet's own approval prompt remains the last line of defence. The claim service's maximum price still caps referred purchases.
 - **The page does not verify the merchant.** It pays any listed `https` endpoint that answers x402. A listing is a signed claim by that merchant, not an endorsement by Noux.
 - **The referrer is whatever `ref` says.** The link carries a wallet address; nothing proves the referrer shared it. A link can be edited to name a different wallet, and a person can run campaigns by promoting with their own wallet in the link.
 - **Purchase memory is local.** The "you already paid" note is stored in the browser's `localStorage`: clearing site data, using another browser or another device removes it, and the page will let the buyer pay again. The public receipt is the real record.
@@ -53,7 +53,6 @@ Status: devnet, **no independent audit**. Read this before putting real money ne
 ## Known gaps (not hidden)
 
 - No audit, no formal verification, no bug bounty.
-- Per-IP rate limiting trusts the first `X-Forwarded-For` hop.
 - A commission budget is a cap, not escrow; there is no top-up and no campaign pause/close instruction.
 - The settlement arithmetic and claim message have Rust unit tests (`cargo test -p noux --lib`, 9 tests: the split sums exactly and respects the fee, rate and budget rules over 500,000 generated cases plus edges, checked against a second algorithm; the 197-byte claim layout; the upgrade-authority parser). Mutation-checked: five deliberate arithmetic and claim-message bugs were each caught. Instructions and account checks are still tested only through TypeScript scripts against a local validator and devnet (22 + 11 + 13 + 13 checks).
 - Real wallet coverage: create, list/edit, refund and a buy-page payment were confirmed with Phantom on devnet; Solflare, Backpack and every other wallet are untested (only a Wallet Standard mock was run), and so is anything on mainnet.

@@ -27,6 +27,7 @@ Web Service settings: Language **Docker**, Dockerfile Path `./Dockerfile`, Healt
 | `CLUSTER` | `devnet` (<= 8 chars; must equal the cluster tag in the campaigns) |
 | `ATTRIBUTION_KEY_B58` | claim-signing secret key (base58). Fresh per cluster |
 | `TRUST_PROXY` | `1` (Render sits in front: use X-Forwarded-For for rate-limit IPs) |
+| `TRUSTED_PROXY_HOPS` | `1` (default): how many proxies sit in front. The client address is that many entries from the RIGHT of `X-Forwarded-For`; entries to the left are client-controlled and ignored. Verify with `curl -H 'X-Forwarded-For: 1.2.3.4' <api>/v1/whoami`: `ip` must be YOUR address, not `1.2.3.4` |
 | `MINT` + `KEEPER_PAYER_B58` | set BOTH to run the settlement keeper inside the API process |
 | optional | `CLAIM_TTL_SECS`, `MAX_PRICE_BASE_UNITS`, `LIMIT_PER_*_PER_MIN`, `KEEPER_TICK_SECONDS` |
 

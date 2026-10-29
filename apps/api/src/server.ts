@@ -15,7 +15,7 @@ const pool = createPool(cfg.DATABASE_URL);
 await migrate(pool);
 const programId = new PublicKey(cfg.PROGRAM_ID);
 const campaigns = new OnchainCampaignReader(new Connection(cfg.RPC_URL, "confirmed"), programId);
-const app = createApp({ cfg, pool, signer, campaigns }, { trustProxy: cfg.TRUST_PROXY === "1", public: { pool, campaigns, cluster: cfg.CLUSTER, programId: cfg.PROGRAM_ID, decimals: cfg.MINT_DECIMALS } });
+const app = createApp({ cfg, pool, signer, campaigns }, { trustProxy: cfg.TRUST_PROXY === "1", proxyHops: cfg.TRUSTED_PROXY_HOPS, public: { pool, campaigns, cluster: cfg.CLUSTER, programId: cfg.PROGRAM_ID, decimals: cfg.MINT_DECIMALS } });
 serve({ fetch: app.fetch, port: cfg.PORT });
 console.log(`api listening on :${cfg.PORT} cluster=${cfg.CLUSTER} attributionKey=${signer.publicKey.toBase58()}`);
 

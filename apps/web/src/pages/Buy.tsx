@@ -7,6 +7,8 @@ import { bpsPct, fmtAmount, short } from "../lib/format";
 import { PROGRAM_ID, ata, USDC_MINT } from "../lib/program";
 import { useWallet } from "../lib/wallet-connect";
 import { discoverPrice, encodeClaimHeader, payWithWallet, requestClaim, usdcBalance, type PaymentRequirement } from "../lib/buy";
+import { checkRequirement } from "../lib/buy-checks";
+import { CHAIN } from "../lib/chain";
 import { isPubkey } from "../lib/wallet";
 import { addPurchase, purchasesFor, type Purchase } from "../lib/purchases";
 import { dayTime } from "../lib/format";
@@ -76,6 +78,7 @@ export default function Buy() {
 
   const buy = async (as: "referred" | "plain") => {
     if (running.current || !w.address || !url || !price) return;
+    if (c && checkRequirement(price, { campaignMint: c.mint, decimals: c.decimals, chain: CHAIN, displayPrice: c.listing?.displayPrice })) return; // belt and braces: never reach the wallet with a mismatching 402
     running.current = true; setBusy(true); setErr(null); setResult(null);
     const labels = as === "referred" ? ["Sign the referral request", "Get your claim", "Approve the payment", "Receive the result"] : ["Approve the payment", "Receive the result"];
     let i = 0;
@@ -111,7 +114,9 @@ export default function Buy() {
   const l = c.listing;
   const need = price ? BigInt(price.amount) : null;
   const short$ = balance !== null && need !== null && balance < need;
-  const canPay = !!w.address && !!price && !busy && isGet;
+  // the 402 comes from the merchant's own server: check it against the campaign and its listing before the wallet is ever asked to pay
+  const mismatch = price ? checkRequirement(price, { campaignMint: c.mint, decimals: c.decimals, chain: CHAIN, displayPrice: l.displayPrice }) : null;
+  const canPay = !!w.address && !!price && !busy && isGet && !mismatch;
   const selfRef = !!w.address && ref !== "" && w.address === ref;
 
   return shell(
@@ -131,6 +136,7 @@ export default function Buy() {
           <span className="tn" style={st("font-size: 32px; letter-spacing: -0.025em; font-weight: 500; color: #111111;")}>{price ? fmtAmount(price.amount) : priceErr ? "—" : "…"} <span style={st("font-size: 14px; color: #6B6B6B; font-weight: 400;")}>USDC · devnet</span></span>
         </div>
         {priceErr && <p role="alert" style={st("font-size: 13px; color: #B42318;")}>{priceErr}</p>}
+        {mismatch && <p role="alert" style={st("font-size: 13px; line-height: 19px; color: #B42318; background: #FFE8E6; border-radius: 8px; padding: 10px 12px;")}>{mismatch}</p>}
         <p style={st("font-size: 13px; line-height: 20px; color: #6B6B6B;")}>
           {ref ? <>Referred by <span className="mono" title={ref}>{short(ref)}</span>. The price is the same with or without a referral: the referrer is paid {bpsPct(c.commissionBps, c.commissionBps % 100 ? 2 : 0)} out of the merchant’s share when the sale settles. </> : <>No referral on this link, so the merchant is paid in full. </>}
           The merchant can refund you before settlement ({c.holdSecs} s hold); after that it is final. This is devnet test money.
