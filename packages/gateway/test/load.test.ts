@@ -198,3 +198,30 @@ describe("an overloaded chain makes the gateway fail open quickly, not hold the 
     } finally { release(); srv.closeAllConnections?.(); await new Promise<void>((r) => srv.close(() => r())); }
   });
 });
+
+describe("a refused payment says why", () => {
+  async function paid(verify: (p: any) => Promise<any>, settle: (p: any) => Promise<any>) {
+    const events: GatewayEvent[] = [];
+    const facilitator: any = { getSupported: async () => ({ kinds: [{ x402Version: 2, scheme: "exact", network: NET, extra: { feePayer: Keypair.generate().publicKey.toBase58() } }], extensions: [], signers: {} }), verify, settle };
+    const gw = createNouxGateway({ programId, cluster: "devnet", campaign, mint, network: NET, merchantPayTo: merchantPay, facilitator, connection: {} as any, campaigns: { get: async () => info() }, opener: { ensureOpen: async (c: SignedClaim) => salePda(programId, c.campaign, c.nonce) }, routes: { "GET /data": { price: PRICE } }, now: () => 1_800_000_000, onEvent: (e: GatewayEvent) => events.push(e) } as any);
+    const app = express(); app.use(gw.middleware); app.get("/data", (_q, r) => r.json({ ok: true }));
+    const srv = await new Promise<import("node:http").Server>((res) => { const s = app.listen(0, () => res(s)); }); const url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}/data`;
+    const c = await mkClaim(); const h = { [BRAND.claimHeader]: encodeClaimHeader(claimToWire(c)) };
+    const r1 = await fetch(url, { headers: h }); const req = JSON.parse(Buffer.from(r1.headers.get("payment-required")!, "base64").toString());
+    const pay = Buffer.from(JSON.stringify({ x402Version: 2, accepted: req.accepts[0], payload: { transaction: c.buyer.toBase58() }, resource: req.resource })).toString("base64");
+    const r2 = await fetch(url, { headers: { ...h, "payment-signature": pay } }); srv.closeAllConnections?.(); await new Promise<void>((r) => srv.close(() => r()));
+    return { status: r2.status, events };
+  }
+  it("an invalid payment (the facilitator says isValid:false) is reported with the facilitator's reason", async () => {
+    const { status, events } = await paid(async () => ({ isValid: false, invalidReason: "insufficient_funds" }), async () => ({ success: true, transaction: "t", network: NET, payer: "p" }));
+    expect(status).toBe(402); expect(events.find((e) => e.type === "payment_invalid")).toMatchObject({ reason: "insufficient_funds" });
+  });
+  it("a verify call that throws is reported", async () => {
+    const { status, events } = await paid(async () => { throw new Error("facilitator exploded"); }, async () => ({ success: true, transaction: "t", network: NET, payer: "p" }));
+    expect(status).not.toBe(200); expect(events.some((e) => e.type === "payment_verify_failed" && /exploded/.test((e as any).error))).toBe(true);
+  });
+  it("a settle that fails is reported and the buyer is not served", async () => {
+    const { status, events } = await paid(async (p: any) => ({ isValid: true, payer: p.payload.transaction }), async () => { throw new Error("settle exploded"); });
+    expect(status).not.toBe(200); expect(events.some((e) => e.type === "payment_settle_failed" && /exploded/.test((e as any).error))).toBe(true);
+  });
+});

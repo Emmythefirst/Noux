@@ -15,6 +15,9 @@ export type GatewayEvent =
   | { type: "unknown_payto"; payTo: string }
   | { type: "settle_after_delivery"; sale: string; signature: string | null }
   | { type: "settle_after_delivery_failed"; sale: string; error: string }
+  | { type: "payment_invalid"; payTo: string; reason: string }
+  | { type: "payment_verify_failed"; payTo: string; error: string }
+  | { type: "payment_settle_failed"; payTo: string; error: string }
   | { type: "facilitator"; detail: unknown };
 
 export interface RouteSpec { /** Price in base units of the campaign mint. */ price: bigint; description?: string }
@@ -103,8 +106,12 @@ export function createNouxGateway(cfg: NouxGatewayConfig) {
   });
   const server = new x402ResourceServer(facilitator).register(cfg.network as any, new ExactSvmScheme());
 
+  // a refused payment must always say why (an unexplained 402 was seen once in 120 real purchases)
+  server.onVerifyFailure(async ({ requirements, error }) => { emit({ type: "payment_verify_failed", payTo: requirements.payTo, error: String(error?.message ?? error).slice(0, 200) }); });
+  server.onSettleFailure(async ({ requirements, error }) => { emit({ type: "payment_settle_failed", payTo: requirements.payTo, error: String((error as Error)?.message ?? error).slice(0, 200) }); });
   server.onAfterVerify(async ({ requirements, result }) => {
     const payTo = requirements.payTo;
+    if (!result.isValid) emit({ type: "payment_invalid", payTo, reason: String((result as any).invalidReason ?? (result as any).invalidMessage ?? "unknown").slice(0, 120) });
     if (payTo === merchant) return; // plain purchase: any payer is fine
     const claim = sales.get(payTo);
     if (!claim) { emit({ type: "unknown_payto", payTo }); return { abort: true as const, reason: "unknown_payto", message: "payment target is not a known sale" }; }
