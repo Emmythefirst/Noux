@@ -43,6 +43,19 @@ To run it on AWS:
 2. Create an identity allowed only `kms:Sign` and `kms:GetPublicKey` on that key's ARN.
 3. `cd apps/api && pnpm add -D @aws-sdk/client-kms`, then `AWS_REGION=... AWS_KMS_KEY_ID=... pnpm tsx scripts/kms-spike.ts`.
 
+## Decision: Google Cloud KMS (2026-10-29)
+
+Chosen because it is the cheaper of the two to run (a software-protected key costs about $0.06 a month plus $0.03 per 10,000 signatures; new accounts get a $300 credit for 90 days) and it documents pure Ed25519 (`EC_SIGN_ED25519`). Software protection still means the key cannot be read out; it is a lower tamper-resistance grade than a hardware module (the HSM level costs about $1 a month). The spike script supports both providers (`KMS_PROVIDER=gcp`), and its dry run for each passes.
+
+To run it on Google:
+1. Create a Google Cloud account and a project; enable the **Cloud Key Management Service (KMS) API** (billing must be linked).
+2. Key ring in **europe-west3 (Frankfurt)**, then a key with purpose **Asymmetric sign**, protection level **Software**, algorithm **Ed25519** (API name `EC_SIGN_ED25519`; I could not confirm the console's exact label). Copy the full key *version* name: `projects/<P>/locations/europe-west3/keyRings/<R>/cryptoKeys/<K>/cryptoKeyVersions/1` (not a secret).
+3. A service account with no project roles, granted **Cloud KMS CryptoKey Signer/Verifier** (`roles/cloudkms.signerVerifier`: can sign, verify and read the public key; cannot manage or destroy keys) on that one key only. Narrower roles (`signer`, `publicKeyViewer`) exist but I could not confirm their exact permissions.
+4. A JSON key for that service account, kept outside the repository (`chmod 600`), never pasted anywhere.
+5. `cd apps/api && pnpm add -D @google-cloud/kms`, then `GOOGLE_APPLICATION_CREDENTIALS=<file> KMS_PROVIDER=gcp GCP_KMS_KEY_VERSION=<name> pnpm tsx scripts/kms-spike.ts`.
+
+A service-account JSON key is itself a long-lived secret, the Google equivalent of an AWS access key. It protects the signing key from being read out, not from being used while the JSON file is in someone's hands; revoke it in IAM if it leaks.
+
 ## What building it would involve (about half a day once the spike passes)
 
 An `AwsKmsSigner` implementing `ClaimSigner` (fetch the public key once, parse its DER wrapper, sign with `ED25519_SHA_512` and message type `RAW`, re-verify every signature locally so a misconfigured key can never ship a claim the program would reject), a config option for the key id, a startup self-test, and tests with a fake KMS client. The shape is already proven in the spike.

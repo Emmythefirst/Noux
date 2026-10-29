@@ -5,8 +5,12 @@
  *   AWS (real):  cd apps/api && pnpm add -D @aws-sdk/client-kms     # the script does not depend on it until you run it
  *                set -a; . ../../.env; set +a
  *                AWS_REGION=eu-west-1 AWS_KMS_KEY_ID=<key id or arn> pnpm tsx scripts/kms-spike.ts
- *   Dry run (no cloud; a local key plays the KMS, to prove the script's own mechanics):   KMS_FAKE=1 pnpm tsx scripts/kms-spike.ts
+ *   Google (real): cd apps/api && pnpm add -D @google-cloud/kms
+ *                  GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json   (or: gcloud auth application-default login)
+ *                  KMS_PROVIDER=gcp GCP_KMS_KEY_VERSION=projects/<P>/locations/europe-west3/keyRings/<R>/cryptoKeys/<K>/cryptoKeyVersions/1 pnpm tsx scripts/kms-spike.ts
+ *   Dry run (no cloud; a local key plays the KMS, to prove the script's own mechanics):   KMS_FAKE=1 [KMS_PROVIDER=gcp] pnpm tsx scripts/kms-spike.ts
  *   Skip the devnet step:  SKIP_DEVNET=1
+ * Google key: protection level Software (cheap) or HSM, purpose "Asymmetric sign", algorithm Ed25519 (API name EC_SIGN_ED25519). Give the signing identity roles/cloudkms.signerVerifier on that key only.
  * Create the AWS key (spec name is exact):  aws kms create-key --key-spec ECC_NIST_EDWARDS25519 --key-usage SIGN_VERIFY --description "noux claim signing (spike)"
  * Least-privilege policy for the identity that signs: kms:Sign and kms:GetPublicKey on that one key ARN, nothing else.
  */
@@ -17,7 +21,7 @@ import * as anchor from "@anchor-lang/core";
 import { buildClaimMessage, configPda, idl, signClaim, claimIsSelfConsistent, type ClaimSigner } from "@noux/core";
 import { AnchorChain } from "@noux/gateway";
 
-const FAKE = !!process.env.KMS_FAKE;
+const FAKE = !!process.env.KMS_FAKE, PROVIDER = process.env.KMS_PROVIDER === "gcp" ? "gcp" : "aws";
 // Ed25519 straight from Node's crypto (OpenSSL): an implementation independent of the libraries Noux itself uses
 const verifyEd25519 = (message: Uint8Array, signature: Uint8Array, pub32: Uint8Array) => { try { return crypto.verify(null, message, crypto.createPublicKey({ key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), Buffer.from(pub32)]), format: "der", type: "spki" }), signature); } catch { return false; } };
 const SPKI_ED25519_PREFIX = Buffer.from("302a300506032b6570032100", "hex"); // DER SubjectPublicKeyInfo header for an Ed25519 key, followed by the 32 raw bytes
@@ -26,21 +30,38 @@ const info = (m: string) => console.log("      " + m);
 const pct = (a: number[], p: number) => [...a].sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor(p * a.length))] ?? 0;
 
 /** What the spike needs from a KMS. */
-interface Kms { describe(): Promise<{ keySpec: string; algorithms: string[]; publicKeyDer: Uint8Array }>; signRaw(message: Uint8Array): Promise<Uint8Array>; }
+interface Kms { describe(): Promise<{ label: string; pureEd25519: boolean; publicKeyDer: Uint8Array }>; signRaw(message: Uint8Array): Promise<Uint8Array>; }
 
 async function awsKms(): Promise<Kms> {
   const mod: any = await import("@aws-sdk/client-kms").catch(() => { throw new Error("install the SDK first:  cd apps/api && pnpm add -D @aws-sdk/client-kms"); });
   const keyId = process.env.AWS_KMS_KEY_ID; if (!keyId) throw new Error("set AWS_KMS_KEY_ID (key id or ARN)");
   const client = new mod.KMSClient({ region: process.env.AWS_REGION });
   return {
-    describe: async () => { const r = await client.send(new mod.GetPublicKeyCommand({ KeyId: keyId })); return { keySpec: r.KeySpec, algorithms: r.SigningAlgorithms ?? [], publicKeyDer: r.PublicKey }; },
+    describe: async () => { const r = await client.send(new mod.GetPublicKeyCommand({ KeyId: keyId })); return { label: `${r.KeySpec} ${(r.SigningAlgorithms ?? []).join(",")}`, pureEd25519: r.KeySpec === "ECC_NIST_EDWARDS25519" && (r.SigningAlgorithms ?? []).includes("ED25519_SHA_512"), publicKeyDer: r.PublicKey }; },
     // pure Ed25519 over the RAW message (the program verifies the signature over exactly these bytes)
     signRaw: async (message) => { const r = await client.send(new mod.SignCommand({ KeyId: keyId, Message: message, MessageType: "RAW", SigningAlgorithm: "ED25519_SHA_512" })); return new Uint8Array(r.Signature); },
   };
 }
+/** Google Cloud KMS. `client` is injectable so the dry run exercises THIS mapping code (PEM -> DER, request shapes) with a fake client of the same shape as the real SDK. */
+async function gcpKms(injected?: any): Promise<Kms> {
+  const name = process.env.GCP_KMS_KEY_VERSION ?? "projects/fake/locations/europe-west3/keyRings/fake/cryptoKeys/fake/cryptoKeyVersions/1"; if (!name) throw new Error("set GCP_KMS_KEY_VERSION (the full cryptoKeyVersions/N name)");
+  const client = injected ?? new ((await import("@google-cloud/kms").catch(() => { throw new Error("install the SDK first:  cd apps/api && pnpm add -D @google-cloud/kms"); })) as any).KeyManagementServiceClient();
+  return {
+    describe: async () => { const [r] = await client.getPublicKey({ name }); const der = crypto.createPublicKey(String(r.pem)).export({ format: "der", type: "spki" }); return { label: `${r.algorithm} (${r.protectionLevel})`, pureEd25519: r.algorithm === "EC_SIGN_ED25519", publicKeyDer: der }; },
+    // pure Ed25519: the RAW message goes in `data` (no digest)
+    signRaw: async (message) => { const [r] = await client.asymmetricSign({ name, data: Buffer.from(message) }); return new Uint8Array(r.signature); },
+  };
+}
 function fakeKms(): Kms { // a local key that behaves like the KMS API, including the DER public key format
   const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
-  return { describe: async () => ({ keySpec: "ECC_NIST_EDWARDS25519", algorithms: ["ED25519_SHA_512", "ED25519_PH_SHA_512"], publicKeyDer: publicKey.export({ format: "der", type: "spki" }) }), signRaw: async (m) => crypto.sign(null, m, privateKey) };
+  return { describe: async () => ({ label: "ECC_NIST_EDWARDS25519 ED25519_SHA_512,ED25519_PH_SHA_512", pureEd25519: true, publicKeyDer: publicKey.export({ format: "der", type: "spki" }) }), signRaw: async (m) => crypto.sign(null, m, privateKey) };
+}
+function fakeGcpClient() { // the same call shapes as @google-cloud/kms
+  const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
+  return {
+    getPublicKey: async (_req: { name: string }) => [{ pem: publicKey.export({ format: "pem", type: "spki" }), algorithm: "EC_SIGN_ED25519", protectionLevel: "SOFTWARE" }],
+    asymmetricSign: async (req: { name: string; data: Buffer }) => { if (!Buffer.isBuffer(req.data)) throw new Error("data must be the raw message bytes"); return [{ signature: crypto.sign(null, req.data, privateKey) }]; },
+  };
 }
 
 /** A ClaimSigner backed by a KMS: the shape the production signer would have. It re-verifies every signature locally, so a wrongly configured key can never ship a claim the program would reject. */
@@ -48,8 +69,7 @@ class KmsClaimSigner implements ClaimSigner {
   private constructor(readonly publicKey: PublicKey, private kms: Kms) {}
   static async create(kms: Kms) {
     const d = await kms.describe();
-    if (d.keySpec !== "ECC_NIST_EDWARDS25519") throw new Error(`key spec is ${d.keySpec}, expected ECC_NIST_EDWARDS25519`);
-    if (!d.algorithms.includes("ED25519_SHA_512")) throw new Error("the key does not offer ED25519_SHA_512 (pure Ed25519)");
+    if (!d.pureEd25519) throw new Error(`${d.label}: not a pure Ed25519 key (AWS: ECC_NIST_EDWARDS25519 with ED25519_SHA_512; Google: EC_SIGN_ED25519)`);
     const der = Buffer.from(d.publicKeyDer);
     if (der.length !== 44 || !der.subarray(0, 12).equals(SPKI_ED25519_PREFIX)) throw new Error("public key is not a 32-byte Ed25519 SubjectPublicKeyInfo");
     return new KmsClaimSigner(new PublicKey(der.subarray(12)), kms);
@@ -61,16 +81,16 @@ class KmsClaimSigner implements ClaimSigner {
   }
 }
 
-console.log(FAKE ? "DRY RUN: a local key stands in for the KMS (proves the script, not a provider)\n" : `AWS KMS, region ${process.env.AWS_REGION ?? "(default)"}\n`);
-const kms = FAKE ? fakeKms() : await awsKms();
+console.log(FAKE ? `DRY RUN (${PROVIDER}): a local key stands in for the KMS (proves the script and its provider mapping, not a provider)\n` : PROVIDER === "gcp" ? `Google Cloud KMS, key ${process.env.GCP_KMS_KEY_VERSION}\n` : `AWS KMS, region ${process.env.AWS_REGION ?? "(default)"}\n`);
+const kms: Kms = PROVIDER === "gcp" ? await gcpKms(FAKE ? fakeGcpClient() : undefined) : FAKE ? fakeKms() : await awsKms();
 const d = await kms.describe();
-rec("the key is an Ed25519 key (ECC_NIST_EDWARDS25519) that offers pure ED25519_SHA_512", d.keySpec === "ECC_NIST_EDWARDS25519" && d.algorithms.includes("ED25519_SHA_512"), `${d.keySpec} ${d.algorithms.join(",")}`);
+rec("the key is a PURE Ed25519 key (AWS: ECC_NIST_EDWARDS25519 + ED25519_SHA_512; Google: EC_SIGN_ED25519)", d.pureEd25519, d.label);
 const signer = await KmsClaimSigner.create(kms);
 rec("the public key is a 32-byte Ed25519 key and parses to a Solana address", signer.publicKey.toBytes().length === 32, signer.publicKey.toBase58());
 
 const params = { programId: new PublicKey((idl as any).address), cluster: "devnet", campaign: Keypair.generate().publicKey, distributor: Keypair.generate().publicKey, buyer: Keypair.generate().publicKey, expiry: Math.floor(Date.now() / 1000) + 600, price: 10_000n, nonce: crypto.randomBytes(32) };
 const msg = buildClaimMessage(params);
-rec("a real Noux claim message is 197 bytes (far below the KMS 4096-byte message limit)", msg.length === 197 && msg.length <= 4096, `${msg.length} bytes`);
+rec("a real Noux claim message is 197 bytes (far below the providers' message limits: AWS 4096 bytes)", msg.length === 197 && msg.length <= 4096, `${msg.length} bytes`);
 const sig = await signer.sign(msg);
 rec("the KMS signature verifies as standard Ed25519 over the raw message (what Solana's precompile checks)", verifyEd25519(msg, sig, signer.publicKey.toBytes()) && sig.length === 64);
 const sig2 = await signer.sign(msg); rec("signing is deterministic (same message, same signature: a property of pure Ed25519)", Buffer.from(sig).equals(Buffer.from(sig2)));
