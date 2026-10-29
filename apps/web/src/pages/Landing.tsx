@@ -168,13 +168,16 @@ export default function Landing() {
         </section>
 
         {/* Proof strip: honest, no logos */}
-        <section aria-label="What is live" style={st("border-top: 1px solid #EBEBEB; border-bottom: 1px solid #EBEBEB; background: #FAFAFA;")}>
-          <div style={st("max-width: 1280px; margin: 0 auto; padding: 20px clamp(16px, 4vw, 48px); display: flex; flex-wrap: wrap; gap: 12px 40px; align-items: center; font-size: 13px; color: #6B6B6B;")}>
-            <span style={st("display: inline-flex; align-items: center; gap: 8px;")}><span aria-hidden="true" style={st("width: 6px; height: 6px; border-radius: 9999px; background: #15B042;")} />Program live on devnet <a className="mono" href="https://explorer.solana.com/address/AC6AtoRALLszNGNLmHte2UXKzCqBYQKhPdtq5qs77nkL?cluster=devnet" target="_blank" rel="noreferrer" style={st("color: #333333;")}>AC6A…7nkL</a></span>
-            <span>Standard x402 <span className="mono" style={st("color: #333333;")}>exact</span> scheme, settled by the Coinbase CDP facilitator</span>
-            <span>Real end-to-end sale with a public receipt</span>
-            {stats.data && <span className="tn">{stats.data.totals.settled} settled sales on devnet (test USDC, including our own load tests)</span>}
-            <span>Mainnet: <span style={st("color: #333333;")}>planned</span></span>
+        <section aria-label="What is live" className="mq" style={st("border-top: 1px solid #EBEBEB; border-bottom: 1px solid #EBEBEB; background: #FAFAFA; font-size: 13px; color: #6B6B6B;")}>
+          <div className="mq-track">
+            {[false, true].map((hidden) => (
+              <div key={String(hidden)} className="mq-set" aria-hidden={hidden || undefined} style={st("padding-top: 18px; padding-bottom: 18px;")}>
+                <span style={st("display: inline-flex; align-items: center; gap: 8px;")}><span aria-hidden="true" style={st("width: 6px; height: 6px; border-radius: 9999px; background: #15B042;")} /><a href="https://explorer.solana.com/address/AC6AtoRALLszNGNLmHte2UXKzCqBYQKhPdtq5qs77nkL?cluster=devnet" target="_blank" rel="noreferrer" tabIndex={hidden ? -1 : undefined} style={st("color: #333333;")}>Program live on devnet</a></span>
+                <span>Standard x402 <span className="mono" style={st("color: #333333;")}>exact</span> scheme, settled by the Coinbase CDP facilitator</span>
+                <span>Real end-to-end sale with a public receipt</span>
+                {stats.data && <span className="tn">{stats.data.totals.settled} settled sales on devnet (test USDC, including our own load tests)</span>}
+              </div>
+            ))}
           </div>
         </section>
 

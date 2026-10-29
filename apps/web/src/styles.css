@@ -19,7 +19,7 @@ a{color:#0F766E;text-decoration:none}a:hover{color:#115E59}
 .nv:hover{background:#F4F4F5 !important;color:#111111 !important}
 .gh:hover{background:#F4F4F5 !important}
 .ib:hover{background:#F4F4F5 !important;color:#111111 !important}
-.ch:hover{border-color:#D4D4D8 !important}
+.ch:hover{border-color:#0F766E !important}
 .chip:hover{border-color:#8A8A8A !important}
 .toc:hover{color:#111111 !important}
 .rh:hover{background:#FAFAFA}
@@ -134,3 +134,11 @@ h2[id],h3[id],section[id]{scroll-margin-top:84px}
 .doc .callout{display:block;padding:14px 16px;border-radius:12px;font-size:14px;line-height:22px;color:#333333;border:1px solid #B3D4FF;background:rgba(0,88,176,0.05)}
 .doc .callout p{margin:0}
 .doc .callout-warn{border-color:#F5D9A8;background:rgba(138,75,0,0.05)}
+
+/* landing status strip: a slow right-to-left ticker; the second copy of the items makes the loop seamless */
+.mq{overflow:hidden;-webkit-mask-image:linear-gradient(to right,transparent,#000 6%,#000 94%,transparent);mask-image:linear-gradient(to right,transparent,#000 6%,#000 94%,transparent)}
+.mq-track{display:flex;width:max-content}
+.mq-set{display:flex;flex:none;align-items:center;gap:64px;padding-right:64px;white-space:nowrap}
+@media (prefers-reduced-motion:no-preference){.mq-track{animation:mq 40s linear infinite}.mq:hover .mq-track,.mq:focus-within .mq-track{animation-play-state:paused}}
+@media (prefers-reduced-motion:reduce){.mq{overflow-x:auto;-webkit-mask-image:none;mask-image:none}.mq-set[aria-hidden]{display:none}}
+@keyframes mq{to{transform:translateX(-50%)}}

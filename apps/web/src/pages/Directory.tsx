@@ -37,7 +37,7 @@ function CampaignCard({ c }: { c: Campaign }) {
   // a refund rate next to "0 sales" reads like a bug; say what happened in plain counts instead
   const refunds = c.sales.settled === 0 ? (c.sales.refunded > 0 ? `${c.sales.refunded} refunded` : null) : c.sales.refundRate === null ? null : `${(c.sales.refundRate * 100).toFixed(c.sales.refundRate === 0 ? 0 : 1)}% refunds`;
   return (
-    <article className="ch press fadein" style={st("display: flex; flex-direction: column; border: 1px solid #EBEBEB; border-radius: 12px; background: #FFFFFF; overflow: hidden;")}>
+    <article className="ch press fadein" style={st("display: flex; flex-direction: column; border: 2px solid #D4D4D8; border-radius: 14px; background: #FFFFFF; overflow: hidden;")}>
       <Link to={`/campaigns/${c.address}`} aria-label={`${name}: view campaign`} style={st("flex: 1; display: flex; flex-direction: column; gap: 16px; padding: 20px; color: #333333;")}>
         <div style={st("display: flex; align-items: flex-start; gap: 12px;")}>
           <div aria-hidden="true" style={st("width: 36px; height: 36px; flex: none; border-radius: 10px; background: #F4F4F5; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #111111;")}>{initials(name)}</div>
