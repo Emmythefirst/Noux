@@ -141,14 +141,14 @@ function DocsHeader({ onSearch }: { onSearch: () => void }) {
   const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
   return (
     <header style={st("position: sticky; top: 0; z-index: 20; background: var(--glass-docs); backdrop-filter: saturate(180%) blur(12px); -webkit-backdrop-filter: saturate(180%) blur(12px); border-bottom: 1px solid #EBEBEB;")}>
-      <nav aria-label="Primary" style={st("padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 24px;")}>
+      <nav className="topnav" aria-label="Primary" style={st("padding: 0 clamp(12px, 4vw, 24px); height: 56px; display: flex; align-items: center; gap: 24px;")}>
         <NavMenu />
         <Link to="/" aria-label="Noux home" style={st("display: flex; align-items: center; gap: 10px; color: #111111; margin-left: -16px;")}>
-          <Mark /><span style={st("font-size: 17px; font-weight: 600; letter-spacing: -0.03em;")}>noux</span><span style={st("font-size: 14px; color: #6B6B6B; font-weight: 400;")}>Docs</span>
+          <Mark /><span style={st("font-size: 17px; font-weight: 600; letter-spacing: -0.03em;")}>noux</span><span className="hide-xs" style={st("font-size: 14px; color: #6B6B6B; font-weight: 400;")}>Docs</span>
         </Link>
         <button className="press bs" type="button" onClick={onSearch} aria-label="Search docs" style={st("flex: 0 1 320px; height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; border: 1px solid #EBEBEB; border-radius: 10px; background: #FAFAFA; color: #6B6B6B; font: 400 14px Inter, sans-serif; cursor: pointer; text-align: left;")}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" strokeWidth="1.5" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-          <span style={{ flex: 1 }}>Search docs</span>
+          <span className="hide-xs" style={{ flex: 1 }}>Search docs</span>
           <kbd className="mono hide-sm" style={st("font-size: 11px; color: #333333; background: #FFFFFF; border: 1px solid #EBEBEB; border-radius: 4px; padding: 1px 5px;")}>{mac ? "⌘K" : "Ctrl K"}</kbd>
         </button>
         <div style={{ flex: 1 }} />
