@@ -64,8 +64,8 @@ export function TopUpDialog({ campaign, onClose, onDone }: { campaign: Campaign;
 /** Change which key the campaign trusts to sign claims. Takes effect at once. */
 export function RotateKeyDialog({ campaign, onClose, onDone }: { campaign: Campaign; onClose: () => void; onDone: (text: string) => void }) {
   const w = useWallet(); const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
-  const [svcKey, setSvcKey] = useState<string | null>(null); const [v, setV] = useState("");
-  useEffect(() => { let live = true; apiGet<{ attributionKey: string }>("/claim-service").then((s) => { if (live) { setSvcKey(s.attributionKey); setV((cur) => cur || s.attributionKey); } }).catch(() => {}); return () => { live = false; }; }, []);
+  const [svcKey, setSvcKey] = useState<string | null>(null); const [retiring, setRetiring] = useState<string[]>([]); const [v, setV] = useState("");
+  useEffect(() => { let live = true; apiGet<{ attributionKey: string; retiringKeys?: string[] }>("/claim-service").then((s) => { if (live) { setSvcKey(s.attributionKey); setRetiring(s.retiringKeys ?? []); setV((cur) => cur || s.attributionKey); } }).catch(() => {}); return () => { live = false; }; }, []);
   const mine = !!w.address && w.address === campaign.merchant;
   const valid = isPubkey(v.trim()) && v.trim() !== "11111111111111111111111111111111" && v.trim() !== campaign.attributionKey;
   const go = async () => {
@@ -76,6 +76,7 @@ export function RotateKeyDialog({ campaign, onClose, onDone }: { campaign: Campa
   return (
     <Shell title="Change the claim key" busy={busy} onClose={onClose}>
       <p style={st("font-size: 14px; line-height: 20px; color: #333333;")}>Every referral claim for this campaign is signed by one key, and the program only accepts claims signed by the key stored here. Change it if you think the current one has leaked, or to move to a new Noux claim key. It takes effect immediately: claims signed by the old key stop working, buyers simply ask for a new one, and sales already open still settle.</p>
+      {campaign.attributionKey && retiring.includes(campaign.attributionKey) && <p role="status" style={st("font-size: 13px; line-height: 19px; color: #8A4B00; background: #FFF1D6; border-radius: 8px; padding: 10px 12px;")}>Noux is retiring the key this campaign trusts. It still works for now, but switch to the current Noux key below before it is removed.</p>}
       <div className="tn" style={st("font-size: 12px; line-height: 18px; color: #6B6B6B; display: flex; flex-direction: column; gap: 2px;")}>
         <span>This campaign trusts now: <span className="mono">{campaign.attributionKey ? short(campaign.attributionKey) : "unknown"}</span></span>
         <span>The Noux claim service signs with: <span className="mono">{svcKey ? short(svcKey) : "…"}</span>{svcKey && campaign.attributionKey === svcKey ? " (the same)" : ""}</span>

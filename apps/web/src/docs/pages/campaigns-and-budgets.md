@@ -29,7 +29,7 @@ The merchant console's **Budget** page shows, per campaign, the cap, what has be
 
 ## The claim key
 
-Every referral claim for a campaign is signed by one key, and the program only accepts claims signed by the key stored on the campaign. A merchant can change that key at any time (**Change claim key** on the campaign page), for example if the key may have leaked or to move to a new Noux claim key. It takes effect immediately: claims signed by the old key stop working (buyers simply request a new one), and sales that were already open settle normally. Only the merchant wallet can change it. Choose a key whose owner you trust: if nobody holds the private key, no referral claim can be issued for the campaign, although buyers can still buy without a referral.
+Every referral claim for a campaign is signed by one key, and the program only accepts claims signed by the key stored on the campaign. A merchant can change that key at any time (**Change claim key** on the campaign page), for example if the key may have leaked or to move to a new Noux claim key. It takes effect immediately: claims signed by the old key stop working (buyers simply request a new one), and sales that were already open settle normally. Only the merchant wallet can change it. If Noux is retiring the key your campaign trusts, the campaign page shows a banner with a button that pre-fills the current key. Choose a key whose owner you trust: if nobody holds the private key, no referral claim can be issued for the campaign, although buyers can still buy without a referral.
 
 ## Listing
 

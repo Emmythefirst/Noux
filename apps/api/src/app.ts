@@ -39,7 +39,13 @@ export function createApp(deps: Deps, opts: { trustProxy: boolean; proxyHops?: n
     });
     app.route("/v1", publicRoutes(opts.public));
     // What a new campaign must name as its attribution key for this service to issue claims for it. Public keys only.
-    app.get("/v1/claim-service", (c) => c.json({ attributionKey: deps.signer.publicKey.toBase58(), cluster: deps.cfg.CLUSTER, programId: deps.cfg.PROGRAM_ID, claimTtlSecs: deps.cfg.CLAIM_TTL_SECS }));
+    app.get("/v1/claim-service", async (c) => {
+      const active = deps.signer.publicKey.toBase58(), retiring = (deps.retiringSigners ?? []).map((s) => s.publicKey.toBase58());
+      // how many campaigns still trust each key we sign for: an operator drops a retiring key when its count reaches zero (ended campaigns do not count)
+      const rows = (await opts.public!.pool.query("SELECT attribution_key, count(*)::int n FROM idx_campaigns WHERE state <> 'ended' AND attribution_key = ANY($1::text[]) GROUP BY 1", [[active, ...retiring]])).rows;
+      const campaignsByKey = Object.fromEntries([active, ...retiring].map((k) => [k, rows.find((r) => r.attribution_key === k)?.n ?? 0]));
+      return c.json({ attributionKey: active, retiringKeys: retiring, campaignsByKey, cluster: deps.cfg.CLUSTER, programId: deps.cfg.PROGRAM_ID, claimTtlSecs: deps.cfg.CLAIM_TTL_SECS });
+    });
   }
   app.get("/healthz", (c) => c.json({ ok: true, attributionKey: deps.signer.publicKey.toBase58(), cluster: deps.cfg.CLUSTER }));
 

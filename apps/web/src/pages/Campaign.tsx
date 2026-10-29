@@ -97,6 +97,7 @@ export default function CampaignPage() {
   const camp = useApi<CampaignDetail>(`/campaigns/${address}`);
   const sales = useApi<ApiPage<Receipt>>(`/campaigns/${address}/sales?limit=100`);
   const fresh = useIndexFreshness();
+  const svc = useApi<{ attributionKey: string; retiringKeys?: string[] }>("/claim-service"); // which keys the claim service is retiring
   const now = useNow(1000);
   const me = useWallet().address;
   const [listing, setListing] = useState(false);
@@ -161,6 +162,7 @@ export default function CampaignPage() {
               </div>
             </div>
           </div>
+          {me && me === c.merchant && c.attributionKey && (svc.data?.retiringKeys ?? []).includes(c.attributionKey) && <p role="status" style={st("width: 100%; font-size: 13px; line-height: 19px; color: #8A4B00; background: #FFF1D6; border-radius: 8px; padding: 10px 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;")}><span style={{ flex: 1, minWidth: 220 }}>Noux is retiring the claim key this campaign trusts. Referrals still work for now, but switch to the current key before the old one is removed.</span><button className="press bs" type="button" onClick={() => setControls("key")} style={st("height: 32px; padding: 0 12px; border-radius: 10px; border: 1px solid #D4D4D8; background: #FFFFFF; color: #111111; font: 500 13px Inter, sans-serif; cursor: pointer;")}>Change claim key</button></p>}
           {(stateOverride ?? c.state) === "paused" && <p role="status" style={st("width: 100%; font-size: 13px; line-height: 19px; color: #8A4B00; background: #FFF1D6; border-radius: 8px; padding: 10px 12px;")}>The merchant has paused promotions. No new referral sales are being opened right now; you can still buy without a referral, and referral links resume working if the merchant resumes.</p>}
           {(stateOverride ?? c.state) === "ended" && <p role="status" style={st("width: 100%; font-size: 13px; line-height: 19px; color: #333333; background: #F4F4F5; border-radius: 8px; padding: 10px 12px;")}>This campaign has ended. It takes no new referral sales and will not reopen. Past receipts stay public and verifiable.</p>}
           <div style={st("display: flex; gap: 8px; flex-wrap: wrap;")}>

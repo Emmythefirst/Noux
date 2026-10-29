@@ -43,4 +43,4 @@ Default limits per minute: 30 per distributor, 10 per buyer, 120 per campaign, 6
 
 ## `GET /v1/claim-service`
 
-Public information a campaign needs: `attributionKey` (the key a new campaign must name so this service can issue claims for it), `cluster`, `programId` and `claimTtlSecs`.
+Public information a campaign needs: `attributionKey` (the key a new campaign must name so this service can issue claims for it), `retiringKeys` (keys the service is phasing out: it still signs for campaigns that trust them, and merchants are asked to switch), `campaignsByKey` (how many non-ended campaigns trust each of those keys), `cluster`, `programId` and `claimTtlSecs`.

@@ -12,6 +12,8 @@ const schema = z.object({
   ATTRIBUTION_KEY_FILE: z.string().optional(),
   /** Base58 secret key in an env var (for PaaS secret stores). Ignored if a file is given. */
   ATTRIBUTION_KEY_B58: z.string().optional(),
+  /** Secret keys (base58, comma-separated) of attribution keys being RETIRED. The service still signs claims with them, but only for campaigns that still trust them, so a key rotation of the service never strands campaigns whose merchants have not switched yet. Drop a key once /v1/claim-service shows no campaign left on it. */
+  ATTRIBUTION_RETIRING_KEYS_B58: z.string().optional(),
   CLAIM_TTL_SECS: num(600),
   MAX_PRICE_BASE_UNITS: z.coerce.bigint().positive().default(100_000_000n), // 100 USDC
   LIMIT_PER_DISTRIBUTOR_PER_MIN: num(30),

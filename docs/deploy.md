@@ -26,6 +26,7 @@ Web Service settings: Language **Docker**, Dockerfile Path `./Dockerfile`, Healt
 | `PROGRAM_ID` | `AC6AtoRALLszNGNLmHte2UXKzCqBYQKhPdtq5qs77nkL` (devnet) |
 | `CLUSTER` | `devnet` (<= 8 chars; must equal the cluster tag in the campaigns) |
 | `ATTRIBUTION_KEY_B58` | claim-signing secret key (base58). Fresh per cluster |
+| `ATTRIBUTION_RETIRING_KEYS_B58` | optional, comma-separated secret keys being RETIRED (at most 3). The service still signs for campaigns that trust them. See the rotation runbook below |
 | `TRUST_PROXY` | `1` (Render sits in front: use X-Forwarded-For for rate-limit IPs) |
 | `TRUSTED_PROXY_HOPS` | `3` (default, correct for Render, which sits behind Cloudflare: a request arrives as `client, Cloudflare edge, Render internal proxy`; observed on 2026-10-29). How many proxy entries sit in front of the service. The client address is that many entries from the RIGHT of `X-Forwarded-For`; entries to the left are client-controlled and ignored. Verify with `curl -H 'X-Forwarded-For: 1.2.3.4' <api>/v1/whoami`: `ip` must be YOUR address (compare with `curl https://api.ipify.org`), not `1.2.3.4` and not a private `10.x` address: a private address means the setting is too low and EVERY visitor shares one rate-limit bucket. Recheck after any change of hosting or CDN |
 | `MINT` + `KEEPER_PAYER_B58` | set BOTH to run the settlement keeper inside the API process |
@@ -39,6 +40,15 @@ Render turns env vars into Docker build args too; the Dockerfile never reference
 - The CDP key (`CDP_API_KEY_ID/SECRET`) is NOT needed on this service: it never calls the facilitator. It belongs to the merchant gateway service.
 - Free Postgres: 1 GB, **expires 30 days after creation** (+14-day grace), no backups. Fine through the hackathon; upgrade or recreate after.
 - Background workers have **no free tier**: another reason to embed the keeper.
+
+## Rotating the claim service's own key
+A campaign trusts one specific claim-signing key, stored on-chain, and only the campaign's merchant can change it. If the service simply swapped its key, every campaign still trusting the old one would be refused until its merchant acted. The overlap avoids that:
+
+1. Generate the new key. Set `ATTRIBUTION_KEY_B58` to it and put the OLD secret in `ATTRIBUTION_RETIRING_KEYS_B58`. Redeploy. The service now signs with the new key for new campaigns and for campaigns that moved, and with the old key for campaigns that still trust it. `GET /v1/claim-service` shows `attributionKey` (active), `retiringKeys` and `campaignsByKey` (how many non-ended campaigns trust each).
+2. Merchants whose campaign trusts a retiring key see a banner on their campaign page ("Noux is retiring the claim key this campaign trusts") with a **Change claim key** button that pre-fills the new key. Tell them; there is no way for the service to switch a campaign on a merchant's behalf.
+3. When `campaignsByKey` shows 0 for the old key, remove it from `ATTRIBUTION_RETIRING_KEYS_B58` and redeploy.
+
+**If the old key LEAKED**, the overlap keeps honest campaigns working but does not protect them: whoever holds the leaked key can sign claims for every campaign that still trusts it, until that merchant rotates. Rotate the high-value campaigns first, and keep the overlap short. Claims signed under the old key stop working on-chain the moment a merchant rotates (verified on devnet), so keeping the old key in the service never weakens a rotation.
 
 ## Key hygiene
 - A fresh attribution key per cluster. The devnet test keys in `spike/keys/` must never be used on mainnet.

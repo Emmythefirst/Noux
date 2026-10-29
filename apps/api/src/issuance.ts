@@ -15,7 +15,7 @@ export interface ClaimRequest {
 }
 export interface Deps {
   cfg: Pick<Config, "CLUSTER" | "PROGRAM_ID" | "CLAIM_TTL_SECS" | "MAX_PRICE_BASE_UNITS" | "LIMIT_PER_DISTRIBUTOR_PER_MIN" | "LIMIT_PER_BUYER_PER_MIN" | "LIMIT_PER_CAMPAIGN_PER_MIN" | "LIMIT_PER_IP_PER_MIN">;
-  pool: pg.Pool; signer: ClaimSigner; campaigns: CampaignReader; now?: () => number; // unix seconds
+  pool: pg.Pool; signer: ClaimSigner; /** keys being retired: still used, but only for campaigns that trust them */ retiringSigners?: ClaimSigner[]; campaigns: CampaignReader; now?: () => number; // unix seconds
 }
 
 const pk = (s: string, field: string) => { try { return new PublicKey(s); } catch { throw new IssuanceError(400, "bad_request", `${field} is not a valid public key`); } };
@@ -45,7 +45,9 @@ export async function issueClaim(d: Deps, req: ClaimRequest, ip: string): Promis
 
   const info = await d.campaigns.get(campaign);
   if (!info) throw new IssuanceError(404, "campaign_not_found", "no such campaign");
-  if (!info.attributionKey.equals(d.signer.publicKey)) throw new IssuanceError(404, "campaign_not_found", "campaign does not use this attribution service");
+  // sign with the key THIS campaign trusts: the active key, or a key being retired that the campaign has not moved away from yet
+  const signer = [d.signer, ...(d.retiringSigners ?? [])].find((s) => s.publicKey.equals(info.attributionKey));
+  if (!signer) throw new IssuanceError(404, "campaign_not_found", "campaign does not use this attribution service");
   if (info.cluster !== d.cfg.CLUSTER) throw new IssuanceError(404, "campaign_not_found", "campaign is on a different cluster");
   // the program refuses new sales on a paused or ended campaign, so a claim for it would be dead on arrival: say so instead of issuing it
   if ((info.state ?? "active") !== "active") throw new IssuanceError(409, "campaign_not_active", info.state === "paused" ? "this campaign is paused: it takes no new referral sales right now" : "this campaign has ended and takes no new referral sales");
@@ -77,7 +79,7 @@ export async function issueClaim(d: Deps, req: ClaimRequest, ip: string): Promis
     throw e;
   } finally { c.release(); }
 
-  const signed = await signClaim(d.signer, {
+  const signed = await signClaim(signer, {
     programId: new PublicKey(d.cfg.PROGRAM_ID), cluster: d.cfg.CLUSTER, campaign, distributor, buyer, expiry, price, nonce,
   });
   return claimToWire(signed);

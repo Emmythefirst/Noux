@@ -23,6 +23,8 @@ services:
         sync: false
       - key: ATTRIBUTION_KEY_B58   # claim-signing key; fresh per cluster
         sync: false
+      - key: ATTRIBUTION_RETIRING_KEYS_B58   # OPTIONAL: key(s) being retired, comma-separated; see docs/deploy.md 'Rotating the claim service key'
+        sync: false
       # Embedded settlement keeper (omit both to disable and run a separate worker instead)
       - key: MINT
         value: 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU   # devnet USDC
