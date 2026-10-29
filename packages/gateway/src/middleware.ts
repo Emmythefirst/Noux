@@ -38,6 +38,8 @@ export interface NouxGatewayConfig {
   routes: Record<string, RouteSpec>;
   /** How long the buyer's response may wait for the merchant's settle-after-delivery (default 0: never; the settle runs detached). */
   settleAfterDeliveryWaitMs?: number;
+  /** Longest the 402 answer may wait for the sale to open on-chain (default 20 s). Beyond it the gateway fails open: the buyer pays the merchant in full and the referral is lost. */
+  openTimeoutMs?: number;
   minClaimLifeSecs?: number;
   now?: () => number;
   onEvent?: (e: GatewayEvent) => void;
@@ -60,6 +62,15 @@ export function createNouxGateway(cfg: NouxGatewayConfig) {
   const merchant = cfg.merchantPayTo.toBase58();
   const sales = new Map<string, SignedClaim>(); // sale vault owner (base58) -> claim; bounded
   const remember = (sale: string, c: SignedClaim) => { sales.set(sale, c); if (sales.size > MAX_TRACKED) sales.delete(sales.keys().next().value as string); };
+  // One answer per claim: the buyer signs a payment for the payee in the FIRST 402 and sends it on the retry. If a retry could get a different payee (the open failed
+  // the first time and works now, or the other way round) the payment would be refused. So the first decision stands until the claim expires.
+  const decided = new Map<string, { payTo: string; until: number }>();
+  const decide = (key: string, payTo: string, until: number) => { decided.set(key, { payTo, until }); if (decided.size > MAX_TRACKED) decided.delete(decided.keys().next().value as string); return payTo; };
+  const openTimeoutMs = cfg.openTimeoutMs ?? 20_000;
+  const openWithin = (claim: SignedClaim) => new Promise<PublicKey>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`opening the sale took longer than ${openTimeoutMs} ms`)), openTimeoutMs); timer.unref?.();
+    cfg.opener.ensureOpen(claim).then((v) => { clearTimeout(timer); resolve(v); }, (e) => { clearTimeout(timer); reject(e); });
+  });
 
   const payToFor = (routeKey: string, spec: RouteSpec) => async (ctx: { adapter: { getHeader(n: string): string | undefined } }): Promise<string> => {
     const header = ctx.adapter.getHeader(BRAND.claimHeader);
@@ -71,15 +82,17 @@ export function createNouxGateway(cfg: NouxGatewayConfig) {
       routePrice: spec.price, nowSec: now(), minLifeSecs: cfg.minClaimLifeSecs ?? 120,
     });
     if (!d.ok) { emit({ type: "claim_rejected", route: routeKey, reason: d.reason }); return merchant; }
+    const key = Buffer.from(d.claim.nonce).toString("hex"), prior = decided.get(key);
+    if (prior && prior.until > now()) { if (prior.payTo !== merchant) remember(prior.payTo, d.claim); return prior.payTo; } // same answer as the first request for this claim
     try {
-      const sale = (await cfg.opener.ensureOpen(d.claim)).toBase58();
+      const sale = (await openWithin(d.claim)).toBase58();
       remember(sale, d.claim);
       emit({ type: "claim_accepted", route: routeKey, sale, distributor: d.claim.distributor.toBase58(), buyer: d.claim.buyer.toBase58() });
-      return sale;
+      return decide(key, sale, d.claim.expiry);
     } catch (e) {
       // Fail open for the BUYER: they can still buy, the merchant is paid, only the referral is lost.
       emit({ type: "sale_open_failed", route: routeKey, error: String((e as Error).message).slice(0, 200) });
-      return merchant;
+      return decide(key, merchant, d.claim.expiry);
     }
   };
 

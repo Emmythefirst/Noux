@@ -39,7 +39,8 @@ app.use(gateway);                                        // your existing Expres
 - **Exact price.** A claim is accepted only if its price equals the route's price. A claim carrying a lower price is ignored and the buyer is charged the real price.
 - **The campaign decides who may sign.** The attribution key must be the one stored on the campaign on-chain, never one named inside the claim.
 - **Payer = buyer.** After the facilitator verifies the payment, the paying wallet must equal the claim's buyer; otherwise the request is aborted before anything settles.
-- **Fails open for buyers.** If opening the sale fails, the buyer can still buy: you are paid in full and the referral is lost.
+- **Fails open for buyers.** If opening the sale fails, or takes longer than 20 seconds, the buyer can still buy: you are paid in full and the referral is lost.
+- **One answer per claim.** The payee the gateway names the first time it sees a claim stands until the claim expires, so the payment a buyer signs for it is never refused because a retry got a different answer.
 - **A failed resource is not charged.** If your handler answers with an error status, nothing is settled.
 
 ## Letting people buy from a browser

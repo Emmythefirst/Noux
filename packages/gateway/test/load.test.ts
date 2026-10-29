@@ -138,3 +138,63 @@ describe("settlement after delivery must not hold the buyer's response hostage",
     } finally { await g.close(); }
   }, 30_000);
 });
+
+describe("the gateway's answer for one claim must not change between the unpaid and the paid request", () => {
+  async function flaky(failFirst: number) {
+    const events: GatewayEvent[] = []; let calls = 0;
+    const opener: SaleOpener = { ensureOpen: async (c) => { calls++; if (calls <= failFirst) throw new Error("rpc overloaded"); return salePda(programId, c.campaign, c.nonce); } };
+    const facilitator: any = {
+      getSupported: async () => ({ kinds: [{ x402Version: 2, scheme: "exact", network: NET, extra: { feePayer: Keypair.generate().publicKey.toBase58() } }], extensions: [], signers: {} }),
+      verify: async (p: any) => ({ isValid: true, payer: p.payload.transaction }), settle: async (p: any) => ({ success: true, payer: p.payload.transaction, transaction: "TX", network: NET }),
+    };
+    const gw = createNouxGateway({ programId, cluster: "devnet", campaign, mint, network: NET, merchantPayTo: merchantPay, facilitator, connection: {} as any, campaigns: { get: async () => info() }, opener, routes: { "GET /data": { price: PRICE } }, now: () => 1_800_000_000, onEvent: (e: GatewayEvent) => events.push(e) });
+    const app = express(); app.use(gw.middleware); app.get("/data", (_q, r) => r.json({ ok: true }));
+    const srv = await new Promise<import("node:http").Server>((res) => { const s = app.listen(0, () => res(s)); });
+    return { url: `http://127.0.0.1:${(srv.address() as AddressInfo).port}/data`, events, calls: () => calls, close: () => new Promise<void>((r) => { srv.closeAllConnections?.(); srv.close(() => r()); }) };
+  }
+  const payTo = async (url: string, claim: SignedClaim) => JSON.parse(Buffer.from((await fetch(url, { headers: { [BRAND.claimHeader]: encodeClaimHeader(claimToWire(claim)) } })).headers.get("payment-required")!, "base64").toString()).accepts[0].payTo as string;
+
+  it("if opening the sale failed the first time, the retry with the same claim keeps answering 'merchant' (no flip), so the buyer's payment is accepted", async () => {
+    const g = await flaky(1);
+    try {
+      const c = await mkClaim(); const first = await payTo(g.url, c);
+      expect(first).toBe(merchantPay.toBase58()); // fail open
+      await sleep(50); const second = await payTo(g.url, c);
+      expect(second).toBe(first); // the opener would succeed now: the answer must NOT change
+      expect(g.calls()).toBe(1); // and the chain was not asked again for this claim
+    } finally { await g.close(); }
+  });
+  it("a payment signed against the first (merchant) answer is accepted on the retry: 200, buyer served, no sale", async () => {
+    const g = await flaky(1);
+    try {
+      const c = await mkClaim(); const buyer = c.buyer.toBase58();
+      const headers = { [BRAND.claimHeader]: encodeClaimHeader(claimToWire(c)) };
+      const r1 = await fetch(g.url, { headers }); const req = JSON.parse(Buffer.from(r1.headers.get("payment-required")!, "base64").toString());
+      const pay = Buffer.from(JSON.stringify({ x402Version: 2, accepted: req.accepts[0], payload: { transaction: buyer }, resource: req.resource })).toString("base64");
+      const r2 = await fetch(g.url, { headers: { ...headers, "payment-signature": pay } });
+      expect(r2.status).toBe(200);
+    } finally { await g.close(); }
+  });
+  it("when the first open succeeded the answer stays the sale vault on the retry (unchanged behaviour)", async () => {
+    const g = await flaky(0);
+    try { const c = await mkClaim(); const a = await payTo(g.url, c); await sleep(30); const b = await payTo(g.url, c); expect(a).toBe(salePda(programId, c.campaign, c.nonce).toBase58()); expect(b).toBe(a); } finally { await g.close(); }
+  });
+});
+
+describe("an overloaded chain makes the gateway fail open quickly, not hold the buyer", () => {
+  it("an open that takes longer than openTimeoutMs answers 'merchant' within the timeout, and a retry stays 'merchant' even if the open finishes later", async () => {
+    let release!: () => void; const gate = new Promise<void>((r) => { release = r; });
+    const opener: SaleOpener = { ensureOpen: async (c) => { await gate; return salePda(programId, c.campaign, c.nonce); } };
+    const facilitator: any = { getSupported: async () => ({ kinds: [{ x402Version: 2, scheme: "exact", network: NET, extra: { feePayer: Keypair.generate().publicKey.toBase58() } }], extensions: [], signers: {} }), verify: async () => ({ isValid: true }), settle: async () => ({ success: true, transaction: "t", network: NET, payer: "p" }) };
+    const events: GatewayEvent[] = [];
+    const gw = createNouxGateway({ programId, cluster: "devnet", campaign, mint, network: NET, merchantPayTo: merchantPay, facilitator, connection: {} as any, campaigns: { get: async () => info() }, opener, openTimeoutMs: 300, routes: { "GET /data": { price: PRICE } }, now: () => 1_800_000_000, onEvent: (e: GatewayEvent) => events.push(e) } as any);
+    const app = express(); app.use(gw.middleware); app.get("/data", (_q, r) => r.json({ ok: true }));
+    const srv = await new Promise<import("node:http").Server>((res) => { const s = app.listen(0, () => res(s)); }); const url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}/data`;
+    try {
+      const c = await mkClaim(); const ask = async () => JSON.parse(Buffer.from((await fetch(url, { headers: { [BRAND.claimHeader]: encodeClaimHeader(claimToWire(c)) } })).headers.get("payment-required")!, "base64").toString()).accepts[0].payTo;
+      const t = Date.now(); const first = await ask(); const took = Date.now() - t;
+      expect(first).toBe(merchantPay.toBase58()); expect(took).toBeLessThan(2000); expect(events.some((e) => e.type === "sale_open_failed" && /longer than/.test((e as any).error))).toBe(true);
+      release(); await sleep(50); expect(await ask()).toBe(first); // the open completed in the background: the answer still does not change
+    } finally { release(); srv.closeAllConnections?.(); await new Promise<void>((r) => srv.close(() => r())); }
+  });
+});
