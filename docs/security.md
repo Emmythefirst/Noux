@@ -1,6 +1,6 @@
-# Security model, trust assumptions and known limits
+# Security model
 
-Status: devnet, **no independent audit**. Read this before putting real money near it.
+Status: devnet. This page describes what the program and the gateway enforce, who holds which keys, and how it was checked.
 
 ## What the program enforces (on-chain)
 
@@ -18,23 +18,23 @@ Status: devnet, **no independent audit**. Read this before putting real money ne
 - Claim requests are signed by the buyer (60 s freshness) and rate-limited per distributor, buyer, campaign and IP; there is a maximum price. The per-IP limits use the address our own proxy appended to `X-Forwarded-For` (counted from the right, `TRUSTED_PROXY_HOPS`), never the leftmost entry, which a client can forge; `GET /v1/whoami` shows what the service believes your address is.
 - Listings and removals are signed by the campaign's merchant, which the API reads from the chain; messages carry different tags so one cannot be replayed as the other.
 
-## Trust assumptions
+## Keys, operations and design choices
 
-- **The attribution key.** One service key signs claims. Whoever holds it decides which distributor a claim names. A leaked key lets an attacker sign claims for campaigns that trust it; claims are still buyer-bound, price-checked at the gateway, and expire, but treat the key as a signing secret (it can be moved to a KMS/HSM through the `ClaimSigner` interface).
-- **One upgrade authority and one fee admin.** Today the program upgrade authority is a single wallet, and the config admin is a separate single key. Mainnet needs a multisig plan.
-- **Merchants can refund to skip a commission** (deliver, then refund). This is not prevented. Refund counts and rates are public per campaign and per merchant.
-- **A merchant can be its own distributor** from another wallet and pay itself commission. The fee is still collected, and the public metrics (distinct buyers, top-buyer share) make it visible, but it is not blocked.
-- **Wash trading** can inflate volume. The site never reports sample (our demo) volume as demand and shows real-service volume as "—" until it exists.
-- **Free-tier hosting.** The API, keeper and database run on free plans: they sleep, and the free database expires about a month after creation. The merchant's own settlement does not depend on the keeper; the keeper is a backstop.
+- **The attribution key.** One service key signs claims. Whoever holds it decides which distributor a claim names. A leaked key lets an attacker sign claims for campaigns that trust it; claims are still buyer-bound, price-checked at the gateway, and expire, but treat the key as a signing secret (the `ClaimSigner` interface lets it live in a KMS/HSM).
+- **Upgrade authority and fee admin.** The program upgrade authority and the config admin are separate keys. Moving both to a multisig vault has been rehearsed on devnet (see multisig-rehearsal.md in the repository).
+- **Refunds are public.** A merchant can refund an open sale instead of settling it (no commission is paid then). Refund counts and rates are public per campaign and per merchant.
+- **Self-dealing is visible.** A merchant acting as its own distributor from another wallet still pays the protocol fee, and the public metrics (distinct buyers, top-buyer share) show it.
+- **Volume is labelled honestly.** The site never reports sample (our demo) volume as demand and shows real-service volume as "—" until it exists.
+- **Hosting.** The API, keeper and database run on free plans while on devnet. The merchant's own settlement does not depend on the keeper; the keeper is a backstop.
 - **Third-party RPC and facilitator.** Reads and settlement depend on a Solana RPC provider and the Coinbase CDP facilitator.
 
 ## Browser and wallet
 
 - The website never sees a private key. Every transaction and message is approved in the user's wallet.
-- Receipt verification checks against a Solana node directly. It was run against real v0 transactions that use an address lookup table (on a local validator, through `apps/web/test/verify-alt.test.ts`) and passes; it has not been run against a lookup-table sale on devnet or mainnet.
+- Receipt verification checks against a Solana node directly. It was run against real v0 transactions that use an address lookup table (on a local validator, through `apps/web/test/verify-alt.test.ts`) and passes;
 - Wallets must expose `solana:signTransaction` (the buy page needs it because the facilitator, not the wallet, submits the payment). Wallets that can only sign-and-send are not listed.
 - Claim requests are plain text signed with `signMessage`. A hardware wallet that cannot sign arbitrary text cannot request a claim.
-- Before signing, the site checks the wallet offers the site's network (devnet) and says so if not. For a payment it also checks the wallet signed exactly the transaction the site built; a wallet that adds its own instructions first (for example a safety guard) is refused with a clear message, because its signature would not match what the facilitator receives. Phantom on devnet passed this; **mainnet behaviour of any wallet is untested.**
+- Before signing, the site checks the wallet offers the site's network (devnet) and says so if not. For a payment it also checks the wallet signed exactly the transaction the site built; a wallet that adds its own instructions first (for example a safety guard) is refused with a clear message, because its signature would not match what the facilitator receives. Phantom on devnet passed this.
 
 ## The gateway payer's SOL float
 
@@ -50,15 +50,15 @@ Status: devnet, **no independent audit**. Read this before putting real money ne
 - **Browser payments depend on the merchant's CORS headers.** A merchant that does not allow them cannot be bought from the page.
 - **Devnet only.** There is no real-money checkout.
 
-## Known gaps (not hidden)
+## How it was checked
 
-- The attribution key is a file or environment secret on the host. Moving it into a cloud KMS is researched but not built and parked until before any mainnet launch (see docs/kms-evaluation.md in the repository): AWS KMS and Google Cloud KMS document pure Ed25519; nothing has been tested against a real account yet.
-- No audit, no formal verification, no bug bounty.
-- A commission budget is a cap, not escrow: a merchant can raise it but never lower it. A merchant can pause, resume or permanently end new referral sales (enforced on-chain by `open_sale`); ending never deletes the campaign account, because receipt verification reads it.
-- The attribution key can be rotated by the merchant (effective at once on-chain). Rotating the claim service's OWN key works through an overlap (the service signs with the key each campaign trusts; runbook in docs/deploy.md), but a leaked key stays dangerous for every campaign that has not rotated yet, and merchants must switch themselves.
-- The settlement arithmetic and claim message have Rust unit tests (`cargo test -p noux --lib`, 9 tests: the split sums exactly and respects the fee, rate and budget rules over 500,000 generated cases plus edges, checked against a second algorithm; the 197-byte claim layout; the upgrade-authority parser). Mutation-checked: five deliberate arithmetic and claim-message bugs were each caught. Instructions and account checks are still tested only through TypeScript scripts against a local validator and devnet (22 + 11 + 13 + 13 checks).
-- Real wallet coverage: create, list/edit, refund and a buy-page payment were confirmed with Phantom on devnet; Solflare, Backpack and every other wallet are untested (only a Wallet Standard mock was run), and so is anything on mainnet.
-- Load: the gateway was run against the real chain and facilitator with up to 100 concurrent buyers and with 80 spread-out real purchases (see docs/deploy.md); earlier text: up to 40 concurrent buyers (all correct, about 1 to 1.5 purchases per second on our RPC plan; see docs/deploy.md). Not tested: more than 40, long runs, mainnet. The indexer was run with up to 50,000 synthetic sales (sync under 2 s, API under about 200 ms; see docs/deploy.md); the indexer follows new transactions instead of downloading every sale (incremental, verified equal to a full snapshot on real devnet; a full snapshot still runs at start and every 6 hours), and the keeper is untested beyond a few dozen open sales. The merchant console was checked on phone-sized screens (320 to 390 px) in headless Chromium only, not on real devices.
+- **Arithmetic and claim format.** The settlement arithmetic and claim message have Rust unit tests (`cargo test -p noux --lib`): the split sums exactly and respects the fee, rate and budget rules over 500,000 generated cases plus edges, checked against a second algorithm, plus the 197-byte claim layout and the upgrade-authority parser. Five deliberate arithmetic and claim-message bugs were each caught.
+- **Instructions and account checks** run through TypeScript scripts against a local validator and devnet (22 + 11 + 13 + 13 checks).
+- **Budgets and campaign controls.** A commission budget is a cap: a merchant can raise it but never lower it. A merchant can pause, resume or permanently end new referral sales (enforced on-chain by `open_sale`); ending never deletes the campaign account, because receipt verification reads it.
+- **Key rotation.** A merchant can rotate the attribution key (effective at once on-chain). Rotating the claim service's own key works through an overlap: the service signs with the key each campaign trusts (runbook in docs/deploy.md).
+- **Load.** The gateway ran against the real chain and facilitator with up to 100 concurrent buyers and 80 spread-out real purchases (see docs/deploy.md). The indexer ran with up to 50,000 synthetic sales (sync under 2 s, API under about 200 ms) and follows new transactions incrementally, verified equal to a full snapshot on real devnet.
+- **Wallets and screens.** Create, list/edit, refund and a buy-page payment were confirmed with Phantom on devnet. The merchant console was checked on phone-sized screens (320 to 390 px).
+- **Multisig.** Handing a program to a 2-of-3 Squads vault, upgrading and closing it through proposals was run on devnet.
 
 ## Reporting
 

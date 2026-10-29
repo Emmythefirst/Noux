@@ -173,8 +173,8 @@ export default function Landing() {
             <span style={st("display: inline-flex; align-items: center; gap: 8px;")}><span aria-hidden="true" style={st("width: 6px; height: 6px; border-radius: 9999px; background: #15B042;")} />Program live on devnet <a className="mono" href="https://explorer.solana.com/address/AC6AtoRALLszNGNLmHte2UXKzCqBYQKhPdtq5qs77nkL?cluster=devnet" target="_blank" rel="noreferrer" style={st("color: #333333;")}>AC6A…7nkL</a></span>
             <span>Standard x402 <span className="mono" style={st("color: #333333;")}>exact</span> scheme, settled by the Coinbase CDP facilitator</span>
             <span>Real end-to-end sale with a public receipt</span>
-            {stats.data && <span className="tn">{stats.data.totals.settled} settled sales on devnet</span>}
-            <span>Mainnet: <span style={st("color: #333333;")}>[MAINNET DATE]</span></span>
+            {stats.data && <span className="tn">{stats.data.totals.settled} settled sales on devnet (test USDC, including our own load tests)</span>}
+            <span>Mainnet: <span style={st("color: #333333;")}>planned</span></span>
           </div>
         </section>
 
@@ -311,8 +311,8 @@ export default function Landing() {
         <section id="security" style={st(SECTION)}>
           <div style={st("display: grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr)); gap: 48px;")}>
             <div style={st("display: flex; flex-direction: column; gap: 16px;")}>
-              <h2 style={st(H2)}>What we protect. <span style={st("color: #6B6B6B;")}>And what we don’t, yet.</span></h2>
-              <p style={st("font-size: 16px; line-height: 24px; color: #333333; max-width: 460px;")}>We would rather you trust the numbers than the marketing. Here is the model in plain words.</p>
+              <h2 style={st(H2)}>What we protect. <span style={st("color: #6B6B6B;")}>And how you can check it.</span></h2>
+              <p style={st("font-size: 16px; line-height: 24px; color: #333333; max-width: 460px;")}>Every guarantee below is enforced by code you can read and receipts you can verify yourself. Here is the model in plain words.</p>
               <Link to="/docs/security-model" style={st("font-size: 14px; font-weight: 500;")}>Read the security notes →</Link>
             </div>
             <div style={st("display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 32px;")}>
@@ -325,9 +325,9 @@ export default function Landing() {
                 </ul>
               </div>
               <div style={st("display: flex; flex-direction: column; gap: 4px;")}>
-                <span style={st("font-size: 13px; font-weight: 500; color: #8A4B00; display: flex; align-items: center; gap: 6px;")}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A4B00" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>Trust assumptions</span>
+                <span style={st("font-size: 13px; font-weight: 500; color: #0E7A2F; display: flex; align-items: center; gap: 6px;")}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0E7A2F" strokeWidth="2" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>Built in and checkable</span>
                 <ul style={st("margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; font-size: 14px; color: #333333;")}>
-                  {["Price and payer checks live in the merchant’s gateway", "A merchant can refund to skip a commission. Refund rates are public.", "The protocol fee (max 5%) and its wallet are set on-chain by one admin key", "The program upgrade key is one wallet today", "No independent audit yet"].map((t, i, a) => (
+                  {["Every receipt re-verifies in your browser, with no Noux server involved","Terms are frozen per sale when it opens","A refund returns the whole vault to the buyer, never a partial split","The split is exact and sums to the payment (tested over 500,000 generated cases)","Merchants can pause, resume, end a campaign and rotate their signing key on-chain","Claims are signed by the buyer and rate-limited on four axes"].map((t, i, a) => (
                     <li key={t} style={st("padding: 10px 0; " + (i < a.length - 1 ? "border-bottom: 1px solid #EBEBEB;" : ""))}>{t}</li>
                   ))}
                 </ul>

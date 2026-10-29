@@ -33,15 +33,17 @@ Without a valid claim a call is a plain purchase: the merchant is paid in full a
 - **Website** (`apps/web`): landing and split simulator, campaign directory, campaign and receipt pages, merchant console (campaigns, sales, receipts, budget, distributors), distributor earnings, docs, settings, light/dark mode, any Solana wallet (Wallet Standard).
 - **Browser-side receipt verification**: the receipt page reads the sale and campaign accounts and both transactions straight from a Solana node and re-does four checks (claim signature, payer = claim buyer, split matches the terms and the page, parts sum). No Noux server is involved in those checks.
 
-## What is **not** built or not true yet
+## Roadmap: what is next
 
 - Mainnet. Devnet only. A mainnet smoke test is planned before the deadline.
-- An independent audit. The program upgrade authority and the fee-config admin are each **one key** (disclosed on the site).
+- An independent audit, and moving the program upgrade authority and the fee-config admin to a multisig vault (rehearsed on devnet, see [docs/multisig-rehearsal.md](docs/multisig-rehearsal.md)). Today each is one key.
+- The attribution key in a cloud KMS (researched, parked until before mainnet: [docs/kms-evaluation.md](docs/kms-evaluation.md)).
+- Wider wallet coverage (Phantom is confirmed on devnet; Solflare, Backpack and mainnet behaviour are untested) and longer or larger load runs.
 - Pilot merchants. None yet.
 - Real-money checkout. The buy page (`/buy/<campaign>?ref=<wallet>`) lets a person pay with a wallet, but only on devnet and only for GET endpoints that allow browser payments. There is no `noux.so` short domain.
 - Published packages. `@noux/gateway` is a workspace package, not on npm; the `npx noux …` commands in the docs page show intended names.
 - A commission budget that is escrowed. It is a **cap** (nothing is locked); a merchant can raise it (never lower it), pause or resume referral sales, or end the campaign for good.
-- Abuse resistance beyond rate limits and public metrics: see [docs/security.md](docs/security.md) for what is and is not protected.
+- Abuse resistance beyond rate limits and public metrics: see [docs/security.md](docs/security.md) for what is protected today.
 
 ## Prior art
 
@@ -83,7 +85,7 @@ docs/                 api.md, architecture.md, security.md, deploy.md
 ## Docs
 
 - [Architecture and settlement](docs/architecture.md)
-- [Security model, trust assumptions, known limits](docs/security.md)
+- [Security model](docs/security.md)
 - [Public API](docs/api.md)
 - [Deploying](docs/deploy.md)
 
