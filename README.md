@@ -86,6 +86,7 @@ docs/                 api.md, architecture.md, security.md, deploy.md
 
 - [Architecture and settlement](docs/architecture.md)
 - [Security model](docs/security.md)
+- [When things go wrong: replayed claim, refund inside the hold, exhausted budget, and every other failure path](apps/web/src/docs/pages/failure-paths.md)
 - [Public API](docs/api.md)
 - [Deploying](docs/deploy.md)
 

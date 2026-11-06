@@ -4,9 +4,9 @@ import { renderDoc, plainText } from "../src/docs/render";
 import { searchDocs } from "../src/docs/search";
 
 describe("docs registry", () => {
-  it("has the 15 pages of the design, each with a unique slug, in 5 groups", () => {
-    expect(PAGES).toHaveLength(15);
-    expect(new Set(PAGES.map((p) => p.slug)).size).toBe(15);
+  it("has the 16 pages (the 15 of the design plus the failure paths), each with a unique slug, in 5 groups", () => {
+    expect(PAGES).toHaveLength(16);
+    expect(new Set(PAGES.map((p) => p.slug)).size).toBe(16);
     expect(GROUPS.map((g) => g.title)).toEqual(["Getting started", "Merchants", "Distributors", "Reference", "Trust"]);
   });
   it("every markdown page has real content (nothing is a stub)", () => {

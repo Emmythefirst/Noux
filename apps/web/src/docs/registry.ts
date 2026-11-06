@@ -14,6 +14,7 @@ import agents from "./pages/agents-and-claims.md?raw";
 import claimsApi from "./pages/claims-api.md?raw";
 import onchain from "./pages/on-chain-program.md?raw";
 import changelog from "./pages/changelog.md?raw";
+import failurePaths from "./pages/failure-paths.md?raw";
 
 export type DocKind = "md" | "quickstart" | "status";
 export interface DocPage { slug: string; title: string; group: string; kind: DocKind; md: string; source: string }
@@ -48,6 +49,7 @@ export const PAGES: DocPage[] = [
   { slug: "claims-api", title: "Claims API", group: "Reference", kind: "md", md: claimsApi, source: "apps/web/src/docs/pages/claims-api.md" },
   { slug: "on-chain-program", title: "On-chain program", group: "Reference", kind: "md", md: join(section(archMd, "## Program"), onchain), source: "docs/architecture.md" },
   { slug: "security-model", title: "Security model", group: "Trust", kind: "md", md: dropH1(securityMd), source: "docs/security.md" },
+  { slug: "failure-paths", title: "When things go wrong", group: "Trust", kind: "md", md: failurePaths, source: "apps/web/src/docs/pages/failure-paths.md" },
   { slug: "status", title: "Status", group: "Trust", kind: "status", md: "", source: "apps/web/src/docs/StatusPage.tsx" },
   { slug: "changelog", title: "Changelog", group: "Trust", kind: "md", md: changelog, source: "apps/web/src/docs/pages/changelog.md" },
 ];
