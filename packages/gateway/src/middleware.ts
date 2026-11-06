@@ -59,7 +59,11 @@ const SETTLE_DEADLINE_MS = 60_000;
  *  - payer must equal the claim's buyer (checked after the facilitator verifies, before anything settles)
  *  - facilitator calls are wrapped in ResilientFacilitator (check-chain-before-retry settle)
  */
-export function createNouxGateway(cfg: NouxGatewayConfig) {
+/** An Express-style handler, typed loosely so this package does not need Express types to be installed. Pass it to `app.use(...)`. */
+export type GatewayMiddleware = (req: any, res: any, next: (err?: unknown) => void) => unknown;
+export interface NouxGateway { middleware: GatewayMiddleware; server: x402ResourceServer; facilitator: ResilientFacilitator; trackedSales: () => number }
+
+export function createNouxGateway(cfg: NouxGatewayConfig): NouxGateway {
   const emit = (e: GatewayEvent) => { try { cfg.onEvent?.(e); } catch { /* observers must never break payments */ } };
   const now = cfg.now ?? (() => Math.floor(Date.now() / 1000));
   const merchant = cfg.merchantPayTo.toBase58();
@@ -150,5 +154,5 @@ export function createNouxGateway(cfg: NouxGatewayConfig) {
       description: spec.description ?? key,
     };
   }
-  return { middleware: paymentMiddleware(routes as any, server), server, facilitator, trackedSales: () => sales.size };
+  return { middleware: paymentMiddleware(routes as any, server) as unknown as GatewayMiddleware, server, facilitator, trackedSales: () => sales.size };
 }

@@ -31,7 +31,7 @@ const gateway = createNouxGateway({
   routes: { "GET /v1/brief": { price: 100_000n } },      // base units: 100000 = 0.10 USDC
   onEvent: (e) => console.log(JSON.stringify(e)),
 });
-app.use(gateway);                                        // your existing Express app
+app.use(gateway.middleware);                              // your existing Express app
 ```
 
 ## Rules the gateway enforces
