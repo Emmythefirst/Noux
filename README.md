@@ -93,3 +93,7 @@ docs/                 api.md, architecture.md, security.md, deploy.md
 ## Disclosure
 
 Distributors earn a commission when a buyer they referred pays for a service. Listings and rankings are not endorsements. If you are paid to recommend something, say so.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
