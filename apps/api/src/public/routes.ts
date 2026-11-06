@@ -107,7 +107,16 @@ export function publicRoutes(d: PublicDeps) {
          (SELECT coalesce(sum(gross), 0) FROM idx_sales s WHERE s.campaign = c.address AND s.status = 'settled') volume
        FROM idx_campaigns c LEFT JOIN listings l ON l.campaign = c.address ${where} ORDER BY ${order} LIMIT $${p.length - 1} OFFSET $${p.length}`, p);
     const cfg = await protocol();
-    cache(c); return c.json({ items: rows.map((r) => card(r, cfg)), total, limit: q.data.limit, offset: q.data.offset, disclosure: DISCLOSURE });
+    // Settled sales per UTC day for the last 14 days (oldest first), for the directory's sparkline: one grouped query for the whole page.
+    const DAY = 86400, DAYS = 14, today = Math.floor(now() / DAY), first = today - (DAYS - 1);
+    const daily = new Map<string, number[]>();
+    if (rows.length) {
+      const dr = await d.pool.query(
+        `SELECT campaign, floor(extract(epoch FROM settled_at) / ${DAY})::bigint AS dn, count(*)::int AS n FROM idx_sales
+         WHERE status = 'settled' AND settled_at >= to_timestamp($2::double precision) AND campaign = ANY($1::text[]) GROUP BY 1, 2`, [rows.map((r) => r.address), first * DAY]);
+      for (const x of dr.rows) { const i = Number(x.dn) - first; if (i < 0 || i >= DAYS) continue; const a = daily.get(x.campaign) ?? Array(DAYS).fill(0); a[i] += x.n; daily.set(x.campaign, a); }
+    }
+    cache(c); return c.json({ items: rows.map((r) => ({ ...card(r, cfg), daily: daily.get(r.address) ?? Array(DAYS).fill(0) })), total, limit: q.data.limit, offset: q.data.offset, disclosure: DISCLOSURE });
   });
 
   app.get("/campaigns/:address", async (c) => {

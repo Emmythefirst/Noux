@@ -19,6 +19,8 @@ export interface Campaign {
   status: "active" | "budget_exhausted";
   sales: { settled: number; refunded: number; open: number; refundRate: number | null };
   volume?: string; listing: Listing | null; links: { account: string };
+  /** Settled sales per UTC day over the last 14 days, oldest first (the directory list only; absent on an older API). */
+  daily?: number[];
 }
 export interface CampaignDetail extends Campaign {
   disclosure: string;

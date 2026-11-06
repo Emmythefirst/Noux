@@ -129,6 +129,18 @@ describe("public API: directory", () => {
     expect((await get(app, "/v1/campaigns?merchant=not-a-key")).status).toBe(400);
     expect((await get(app, `/v1/campaigns?includeUnlisted=1&merchant=${kp()}`)).body.total).toBe(0);
   });
+  it("each directory item carries a 14-day settled-sales series (UTC days, oldest first): today counts, an old sale does not", async () => {
+    const day = 86400, today = Math.floor(NOW / day) * day;
+    chain.snap.sales.push(sale({ address: kp(), campaign: B, settledAt: today + 10 }), sale({ address: kp(), campaign: B, settledAt: today + 20 }), sale({ address: kp(), campaign: B, settledAt: today - 3 * day + 5 }), sale({ address: kp(), campaign: B, settledAt: today - 20 * day }));
+    await syncOnce(pool, chain);
+    const app = mkApp(); const items = (await get(app, "/v1/campaigns?includeUnlisted=1")).body.items;
+    const b = items.find((x: any) => x.address === B);
+    expect(b.daily).toHaveLength(14);
+    // today = last slot: the two sales added here plus the snapshot's own settled sale for B (NOW-400 is still today); three days ago = slot 10; the 20-day-old sale is outside the window
+    expect(b.daily[13]).toBe(3); expect(b.daily[10]).toBe(1);
+    expect(b.daily.reduce((x: number, y: number) => x + y, 0)).toBe(4);
+    expect(items.find((x: any) => x.address === A).daily).toHaveLength(14);
+  });
   it("lists only LISTED campaigns by default; includeUnlisted shows all", async () => {
     const app = mkApp();
     expect((await get(app, "/v1/campaigns")).body.items).toHaveLength(0);
